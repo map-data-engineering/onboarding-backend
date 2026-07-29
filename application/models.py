@@ -1,0 +1,105 @@
+import uuid
+
+from django.db import models
+
+
+class Question(models.Model):
+    """A scored multiple-choice question (the knowledge-check items on the form)."""
+
+    class Category(models.TextChoices):
+        R = "R", "R programming"
+        SPATIAL = "SPATIAL", "Spatial data"
+        BAYESIAN = "BAYESIAN", "Bayesian statistics"
+        APPLICATION = "APPLICATION", "Health applications"
+
+    text = models.CharField(max_length=500)
+    category = models.CharField(max_length=20, choices=Category.choices)
+    # e.g. ["read.csv()", "load.csv()", "import.csv()", "open.csv()"]
+    options = models.JSONField(help_text="List of option strings shown to the applicant.")
+    # Must match one of the strings in `options` exactly. NEVER exposed to the client.
+    correct_answer = models.CharField(max_length=255)
+    time_limit_seconds = models.PositiveIntegerField(default=40)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.text[:60]
+
+
+class Application(models.Model):
+    """An applicant's submission (contact info, profile, motivation, CV)."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+
+    # Contact
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    email = models.EmailField()
+    phone = models.CharField(max_length=30)
+    nationality = models.CharField(max_length=100)
+    country_of_residence = models.CharField(max_length=100)
+    gender = models.CharField(max_length=10)
+
+    # Profile
+    institution = models.CharField(max_length=200)
+    institution_type = models.CharField(max_length=50)
+    role = models.CharField(max_length=150)
+    education = models.CharField(max_length=30)
+
+    # Self-rated fields (NOT scored — they are opinions, not right/wrong)
+    r_experience = models.CharField(max_length=30)
+    bayesian_knowledge = models.CharField(max_length=30)
+
+    # Free text
+    motivation = models.TextField(blank=True)
+    expectations = models.TextField(blank=True)
+
+    # Q30: file upload
+    cv = models.FileField(upload_to="cvs/")
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.first_name} {self.last_name} <{self.email}>"
+
+
+class QuizSession(models.Model):
+    """One graded attempt per application. The shuffled order lives in `items`."""
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    application = models.OneToOneField(
+        Application, on_delete=models.CASCADE, related_name="quiz"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    @property
+    def score(self):
+        return self.items.filter(is_correct=True).count()
+
+    @property
+    def total(self):
+        return self.items.count()
+
+    @property
+    def is_complete(self):
+        return self.completed_at is not None
+
+
+class SessionQuestion(models.Model):
+    """A single question inside a session: its shuffled position and its timing."""
+
+    session = models.ForeignKey(
+        QuizSession, on_delete=models.CASCADE, related_name="items"
+    )
+    question = models.ForeignKey(Question, on_delete=models.PROTECT)
+    position = models.PositiveIntegerField()  # shuffled order, 0-based
+
+    served_at = models.DateTimeField(null=True, blank=True)
+    answered_at = models.DateTimeField(null=True, blank=True)
+    submitted_answer = models.CharField(max_length=255, blank=True)
+    is_correct = models.BooleanField(default=False)
+    timed_out = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ("session", "position")
+        ordering = ["position"]
