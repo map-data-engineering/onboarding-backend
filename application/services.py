@@ -96,8 +96,12 @@ def submit_answer(session, answer):
     if session.is_complete:
         raise ValidationError("This quiz is already complete.")
 
-    _finalize_expired(session)
-
+    # NB: do NOT call _finalize_expired() here. It would mark the current
+    # (expired) question as answered, after which the query below would find no
+    # active question and raise -- which is exactly what happens on the client's
+    # auto-submit when the timer runs out, leaving the applicant stuck. Instead
+    # we grade the expired case ourselves in the `now > deadline` branch so the
+    # timed-out question is recorded and the caller can advance to the next one.
     item = (
         session.items.filter(answered_at__isnull=True, served_at__isnull=False)
         .order_by("position")
@@ -111,11 +115,12 @@ def submit_answer(session, answer):
         item.timed_out = True
         item.is_correct = False
         item.submitted_answer = ""
+        item.answered_at = _deadline(item)
     else:
         item.submitted_answer = answer
         item.is_correct = answer == item.question.correct_answer
+        item.answered_at = now
 
-    item.answered_at = now
     item.save()
     _maybe_complete(session)
     return item

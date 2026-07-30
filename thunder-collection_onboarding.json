@@ -1,0 +1,220 @@
+{
+  "client": "Thunder Client",
+  "collectionName": "Onboarding API",
+  "dateExported": "2026-07-30T00:00:00.000Z",
+  "version": "1.2",
+  "folders": [
+    { "_id": "fld-applicant", "name": "Applicant Flow", "containerId": "", "created": "2026-07-30T00:00:00.000Z", "sortNum": 10000 },
+    { "_id": "fld-admin", "name": "Admin Panel", "containerId": "", "created": "2026-07-30T00:00:00.000Z", "sortNum": 20000 }
+  ],
+  "requests": [
+    {
+      "_id": "req-create-application",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "1. Create Application (upload CV)",
+      "url": "http://127.0.0.1:8000/api/applications/",
+      "method": "POST",
+      "sortNum": 10000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "formdata",
+        "raw": "",
+        "form": [
+          { "name": "first_name", "value": "Ada" },
+          { "name": "last_name", "value": "Lovelace" },
+          { "name": "email", "value": "ada@example.org" },
+          { "name": "phone", "value": "+441234567890" },
+          { "name": "nationality", "value": "British" },
+          { "name": "country_of_residence", "value": "UK" },
+          { "name": "gender", "value": "Female" },
+          { "name": "institution", "value": "AEI" },
+          { "name": "institution_type", "value": "University" },
+          { "name": "role", "value": "Scientist" },
+          { "name": "education", "value": "PhD" },
+          { "name": "r_experience", "value": "Intermediate" },
+          { "name": "bayesian_knowledge", "value": "Beginner" },
+          { "name": "motivation", "value": "Spatial Bayesian methods" },
+          { "name": "expectations", "value": "Hands-on R" }
+        ],
+        "files": [
+          { "name": "cv", "value": "" }
+        ]
+      },
+      "tests": []
+    },
+    {
+      "_id": "req-start-quiz",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "2. Start Quiz (paste application id in URL)",
+      "url": "http://127.0.0.1:8000/api/applications/PASTE_APPLICATION_ID/quiz/start/",
+      "method": "POST",
+      "sortNum": 20000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-current",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "3. Get Current Question (paste session id in URL)",
+      "url": "http://127.0.0.1:8000/api/quiz/PASTE_SESSION_ID/current/",
+      "method": "GET",
+      "sortNum": 30000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-answer",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "4. Submit Answer (paste session id; repeat until finished)",
+      "url": "http://127.0.0.1:8000/api/quiz/PASTE_SESSION_ID/answer/",
+      "method": "POST",
+      "sortNum": 40000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"answer\": \"sf\"\n}",
+        "form": []
+      },
+      "tests": []
+    },
+    {
+      "_id": "req-result",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "5. Get Result (paste session id in URL)",
+      "url": "http://127.0.0.1:8000/api/quiz/PASTE_SESSION_ID/result/",
+      "method": "GET",
+      "sortNum": 50000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-admin-login",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-admin",
+      "name": "1. Admin Login (copy token from response)",
+      "url": "http://127.0.0.1:8000/api/admin/login/",
+      "method": "POST",
+      "sortNum": 10000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "json",
+        "raw": "{\n  \"username\": \"YOUR_STAFF_USER\",\n  \"password\": \"YOUR_PASSWORD\"\n}",
+        "form": []
+      },
+      "tests": []
+    },
+    {
+      "_id": "req-admin-list",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-admin",
+      "name": "2. List Applicants (paste token in header)",
+      "url": "http://127.0.0.1:8000/api/admin/applications/",
+      "method": "GET",
+      "sortNum": 20000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+      ],
+      "params": [
+        { "name": "search", "value": "", "isDisabled": true }
+      ],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-admin-detail",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-admin",
+      "name": "3. Applicant Detail (paste token + application id)",
+      "url": "http://127.0.0.1:8000/api/admin/applications/PASTE_APPLICATION_ID/",
+      "method": "GET",
+      "sortNum": 30000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+      ],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-admin-breakdown",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-admin",
+      "name": "4. Quiz Breakdown (paste token + application id)",
+      "url": "http://127.0.0.1:8000/api/admin/applications/PASTE_APPLICATION_ID/quiz/",
+      "method": "GET",
+      "sortNum": 40000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+      ],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-admin-me",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-admin",
+      "name": "5. Who Am I (paste token in header)",
+      "url": "http://127.0.0.1:8000/api/admin/me/",
+      "method": "GET",
+      "sortNum": 50000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+      ],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    },
+    {
+      "_id": "req-admin-logout",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-admin",
+      "name": "6. Logout (paste token; invalidates it)",
+      "url": "http://127.0.0.1:8000/api/admin/logout/",
+      "method": "POST",
+      "sortNum": 60000,
+      "created": "2026-07-30T00:00:00.000Z",
+      "modified": "2026-07-30T00:00:00.000Z",
+      "headers": [
+        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+      ],
+      "params": [],
+      "body": { "type": "none", "raw": "", "form": [] },
+      "tests": []
+    }
+  ]
+}

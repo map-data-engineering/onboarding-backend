@@ -54,7 +54,7 @@ class Application(models.Model):
     expectations = models.TextField(blank=True)
 
     # Q30: file upload
-    cv = models.FileField(upload_to="cvs/")
+    cv = models.FileField(upload_to="cvs/", blank=False, null=False)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

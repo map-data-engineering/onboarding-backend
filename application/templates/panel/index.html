@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+{% load static %}
+{% block title %}Staff Panel — Onboarding{% endblock %}
+
+{% block body %}
+<nav class="navbar navbar-expand-lg bg-dark navbar-dark shadow-sm">
+  <div class="container">
+    <span class="navbar-brand fw-semibold"><i class="bi bi-shield-lock-fill"></i> Staff Panel</span>
+    <div class="d-flex align-items-center gap-3 d-none" id="nav-user">
+      <span class="text-white-50 small" id="nav-username"></span>
+      <button class="btn btn-sm btn-outline-light" id="logout-btn"><i class="bi bi-box-arrow-right"></i> Log out</button>
+    </div>
+  </div>
+</nav>
+
+<div class="panel-shell">
+
+  <!-- ============ LOGIN ============ -->
+  <section id="view-login" class="d-none">
+    <div class="row justify-content-center">
+      <div class="col-md-5">
+        <div class="card shadow-sm mt-5">
+          <div class="card-body p-4">
+            <h4 class="mb-3">Staff sign in</h4>
+            <div class="alert alert-danger d-none" id="login-alert"></div>
+            <form id="login-form">
+              <div class="mb-3">
+                <label class="form-label">Username</label>
+                <input class="form-control" name="username" required autocomplete="username">
+              </div>
+              <div class="mb-3">
+                <label class="form-label">Password</label>
+                <input type="password" class="form-control" name="password" required autocomplete="current-password">
+              </div>
+              <div class="d-grid">
+                <button class="btn btn-dark" type="submit" id="login-btn">Sign in</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APPLICANTS LIST ============ -->
+  <section id="view-list" class="d-none">
+    <div class="d-flex justify-content-between align-items-center mb-3">
+      <h4 class="mb-0">Applicants</h4>
+      <div class="input-group" style="max-width:340px">
+        <span class="input-group-text"><i class="bi bi-search"></i></span>
+        <input class="form-control" id="search-input" placeholder="Name, email or institution…">
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+          <thead class="table-light">
+            <tr>
+              <th>Name</th><th>Email</th><th>Institution</th><th>Country</th>
+              <th>Quiz</th><th class="text-center">Score</th><th></th>
+            </tr>
+          </thead>
+          <tbody id="applicants-body">
+            <tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="d-flex justify-content-between align-items-center mt-3">
+      <span class="text-muted small" id="list-count"></span>
+      <div class="btn-group">
+        <button class="btn btn-outline-secondary btn-sm" id="prev-page" disabled><i class="bi bi-chevron-left"></i> Prev</button>
+        <button class="btn btn-outline-secondary btn-sm" id="next-page" disabled>Next <i class="bi bi-chevron-right"></i></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ APPLICANT DETAIL ============ -->
+  <section id="view-detail" class="d-none">
+    <button class="btn btn-link px-0 mb-3" id="back-to-list"><i class="bi bi-arrow-left"></i> Back to applicants</button>
+
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <h4 class="mb-0" id="d-name"></h4>
+        <span class="text-muted" id="d-email"></span>
+      </div>
+      <a class="btn btn-outline-primary d-none" id="d-cv" target="_blank" rel="noopener">
+        <i class="bi bi-file-earmark-arrow-down"></i> Download CV
+      </a>
+    </div>
+
+    <ul class="nav nav-tabs mb-3" role="tablist">
+      <li class="nav-item"><button class="nav-link active" data-tab="profile">Profile</button></li>
+      <li class="nav-item"><button class="nav-link" data-tab="quiz">Quiz breakdown</button></li>
+    </ul>
+
+    <div id="tab-profile">
+      <div class="card shadow-sm"><div class="card-body">
+        <dl class="row mb-0" id="d-fields"></dl>
+      </div></div>
+    </div>
+
+    <div id="tab-quiz" class="d-none">
+      <div id="quiz-summary" class="mb-3"></div>
+      <div class="card shadow-sm">
+        <div class="table-responsive">
+          <table class="table align-middle mb-0">
+            <thead class="table-light">
+              <tr><th>#</th><th>Question</th><th>Category</th><th>Submitted</th><th>Correct</th><th class="text-center">Result</th></tr>
+            </thead>
+            <tbody id="quiz-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </section>
+
+</div>
+
+<script src="{% static 'js/api.js' %}"></script>
+<script src="{% static 'js/panel.js' %}"></script>
+{% endblock %}
