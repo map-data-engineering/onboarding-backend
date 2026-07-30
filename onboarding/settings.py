@@ -47,6 +47,9 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    # Serves static files (incl. css/styles.css) in production so the layout
+    # renders correctly even without a web-server static mapping.
+    "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -99,8 +102,8 @@ USE_TZ = True
 
 
 STATIC_URL = "static/"
-# `collectstatic` gathers admin + app static files here; on PythonAnywhere map
-# the /static/ URL to this folder in the Web tab.
+# `collectstatic` gathers admin + app static files here. WhiteNoise serves them
+# in production; you can optionally also map /static/ to this folder in the PA Web tab.
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
@@ -108,10 +111,19 @@ MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+STORAGES = {
+    "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
+    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+}
+
 # --- Production hardening (only active when DEBUG is off) ---------------------
 # PythonAnywhere terminates HTTPS in front of the app, so trust its proxy header
 # and only send cookies over HTTPS.
 if not DEBUG:
+    # Let WhiteNoise compress and cache-bust static files in production.
+    STORAGES["staticfiles"]["BACKEND"] = (
+        "whitenoise.storage.CompressedManifestStaticFilesStorage"
+    )
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
