@@ -19,6 +19,12 @@ DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
 ALLOWED_HOSTS = os.environ.get("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
+# Required by Django for session-based POSTs (e.g. the admin login) over HTTPS.
+# Set in production to e.g. "https://youruser.pythonanywhere.com".
+CSRF_TRUSTED_ORIGINS = [
+    o for o in os.environ.get("DJANGO_CSRF_TRUSTED_ORIGINS", "").split(",") if o
+]
+
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -88,11 +94,22 @@ USE_TZ = True
 
 
 STATIC_URL = "static/"
+# `collectstatic` gathers admin + app static files here; on PythonAnywhere map
+# the /static/ URL to this folder in the Web tab.
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
 MEDIA_URL = "media/"
 MEDIA_ROOT = BASE_DIR / "media"
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# --- Production hardening (only active when DEBUG is off) ---------------------
+# PythonAnywhere terminates HTTPS in front of the app, so trust its proxy header
+# and only send cookies over HTTPS.
+if not DEBUG:
+    SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+    SESSION_COOKIE_SECURE = True
+    CSRF_COOKIE_SECURE = True
 
 
 REST_FRAMEWORK = {
