@@ -31,5 +31,6 @@ class QuizSessionAdmin(admin.ModelAdmin):
 
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ("first_name", "last_name", "email", "institution", "created_at")
+    list_display = ("first_name", "last_name", "email", "institution", "decision", "created_at")
+    list_filter = ("decision",)
     search_fields = ("first_name", "last_name", "email")

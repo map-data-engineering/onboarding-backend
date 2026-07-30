@@ -79,9 +79,26 @@ const QUIZ_BADGE = {
   completed:   '<span class="badge bg-success">Completed</span>',
 };
 
+const DECISION_BADGE = {
+  PENDING:  '<span class="badge bg-secondary">Pending</span>',
+  SELECTED: '<span class="badge bg-success">Selected</span>',
+  REJECTED: '<span class="badge bg-danger">Rejected</span>',
+};
+
+// action name (UI) -> decision enum (API)
+const DECISION_VALUE = { select: "SELECTED", reject: "REJECTED", pending: "PENDING" };
+
+// Ids of applicants ticked in the current list view.
+const selected = new Set();
+const listAlert = document.getElementById("list-alert");
+
 async function loadList() {
   showView("list");
-  applicantsBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>`;
+  selected.clear();
+  updateBulkBar();
+  listAlert.classList.add("d-none");
+  document.getElementById("select-all").checked = false;
+  applicantsBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">Loading…</td></tr>`;
   const params = new URLSearchParams();
   if (currentSearch) params.set("search", currentSearch);
   if (currentPage > 1) params.set("page", currentPage);
@@ -93,14 +110,14 @@ async function loadList() {
     updatePager();
   } catch (err) {
     if (err.status !== 401) {
-      applicantsBody.innerHTML = `<tr><td colspan="7" class="text-center text-danger py-4">Failed to load applicants.</td></tr>`;
+      applicantsBody.innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">Failed to load applicants.</td></tr>`;
     }
   }
 }
 
 function renderList(rows) {
   if (!rows.length) {
-    applicantsBody.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">No applicants found.</td></tr>`;
+    applicantsBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No applicants found.</td></tr>`;
     return;
   }
   applicantsBody.innerHTML = "";
@@ -108,17 +125,75 @@ function renderList(rows) {
     const tr = document.createElement("tr");
     tr.className = "cursor-pointer";
     const score = r.score != null ? `${r.score} / ${r.total}` : "—";
+    const decision = DECISION_BADGE[r.decision] || esc(r.decision || "");
     tr.innerHTML = `
+      <td class="select-cell"><input type="checkbox" class="form-check-input row-check" value="${r.id}"></td>
       <td class="fw-semibold">${esc(r.first_name)} ${esc(r.last_name)}</td>
       <td>${esc(r.email)}</td>
       <td>${esc(r.institution || "")}</td>
       <td>${esc(r.country_of_residence || "")}</td>
       <td>${QUIZ_BADGE[r.quiz_status] || esc(r.quiz_status)}</td>
       <td class="text-center">${score}</td>
+      <td>${decision}</td>
       <td class="text-end"><i class="bi bi-chevron-right text-muted"></i></td>`;
-    tr.addEventListener("click", () => loadDetail(r.id));
+
+    // Clicking the row opens the detail, except when interacting with the checkbox.
+    tr.addEventListener("click", (e) => {
+      if (e.target.closest(".select-cell")) return;
+      loadDetail(r.id);
+    });
+
+    const cb = tr.querySelector(".row-check");
+    cb.addEventListener("change", () => {
+      cb.checked ? selected.add(r.id) : selected.delete(r.id);
+      syncSelectAll();
+      updateBulkBar();
+    });
     applicantsBody.appendChild(tr);
   });
+}
+
+// ---- Selection & bulk actions ----
+function updateBulkBar() {
+  const bar = document.getElementById("bulk-bar");
+  bar.classList.toggle("d-none", selected.size === 0);
+  document.getElementById("bulk-count").textContent = `${selected.size} selected`;
+}
+
+function syncSelectAll() {
+  const checks = [...document.querySelectorAll(".row-check")];
+  const all = checks.length > 0 && checks.every((c) => c.checked);
+  document.getElementById("select-all").checked = all;
+}
+
+document.getElementById("select-all").addEventListener("change", (e) => {
+  document.querySelectorAll(".row-check").forEach((cb) => {
+    cb.checked = e.target.checked;
+    cb.checked ? selected.add(cb.value) : selected.delete(cb.value);
+  });
+  updateBulkBar();
+});
+
+document.querySelectorAll("[data-bulk]").forEach((btn) =>
+  btn.addEventListener("click", () => runBulk(btn.dataset.bulk)));
+
+async function runBulk(action) {
+  if (!selected.size) return;
+  const ids = [...selected];
+  if (action === "delete" &&
+      !confirm(`Delete ${ids.length} applicant(s)? This also removes their CV and quiz, and cannot be undone.`)) {
+    return;
+  }
+  listAlert.classList.add("d-none");
+  try {
+    await adminCall("POST", "/admin/applications/bulk/", { ids, action });
+    loadList();  // clears selection and re-renders with updated decisions
+  } catch (err) {
+    if (err.status !== 401) {
+      listAlert.textContent = (err.data && err.data.detail) || "Bulk action failed.";
+      listAlert.classList.remove("d-none");
+    }
+  }
 }
 
 function updatePager() {
@@ -150,9 +225,13 @@ const FIELD_LABELS = {
   expectations: "Expectations", created_at: "Applied at",
 };
 
+let currentDetailId = null;
+
 async function loadDetail(id) {
   showView("detail");
   switchTab("profile");
+  currentDetailId = id;
+  document.getElementById("detail-alert").classList.add("d-none");
   document.getElementById("d-fields").innerHTML = `<p class="text-muted">Loading…</p>`;
   document.getElementById("quiz-body").innerHTML = "";
   document.getElementById("quiz-summary").innerHTML = "";
@@ -170,6 +249,8 @@ async function loadDetail(id) {
 function renderDetail(a) {
   document.getElementById("d-name").textContent = `${a.first_name} ${a.last_name}`;
   document.getElementById("d-email").textContent = a.email;
+  document.getElementById("d-decision").innerHTML =
+    DECISION_BADGE[a.decision] || esc(a.decision || "");
 
   const cv = document.getElementById("d-cv");
   if (a.cv) { cv.href = a.cv; cv.classList.remove("d-none"); }
@@ -235,6 +316,43 @@ function switchTab(name) {
 }
 
 document.getElementById("back-to-list").addEventListener("click", () => loadList());
+
+// Detail decision buttons
+document.querySelectorAll("[data-decision]").forEach((btn) =>
+  btn.addEventListener("click", () => setDecision(btn.dataset.decision)));
+
+async function setDecision(action) {
+  if (!currentDetailId) return;
+  const detailAlert = document.getElementById("detail-alert");
+  detailAlert.classList.add("d-none");
+  try {
+    const a = await adminCall("PATCH", `/admin/applications/${currentDetailId}/`,
+      { decision: DECISION_VALUE[action] });
+    document.getElementById("d-decision").innerHTML =
+      DECISION_BADGE[a.decision] || esc(a.decision || "");
+  } catch (err) {
+    if (err.status !== 401) {
+      detailAlert.textContent = (err.data && err.data.detail) || "Could not update decision.";
+      detailAlert.classList.remove("d-none");
+    }
+  }
+}
+
+// Detail delete
+document.getElementById("d-delete").addEventListener("click", async () => {
+  if (!currentDetailId) return;
+  if (!confirm("Delete this applicant? This also removes their CV and quiz, and cannot be undone.")) return;
+  try {
+    await adminCall("DELETE", `/admin/applications/${currentDetailId}/`);
+    loadList();
+  } catch (err) {
+    if (err.status !== 401) {
+      const detailAlert = document.getElementById("detail-alert");
+      detailAlert.textContent = (err.data && err.data.detail) || "Could not delete applicant.";
+      detailAlert.classList.remove("d-none");
+    }
+  }
+});
 
 // ------------------------------------------------------------------ Helpers
 function esc(s) {

@@ -28,6 +28,11 @@ class Question(models.Model):
 class Application(models.Model):
     """An applicant's submission (contact info, profile, motivation, CV)."""
 
+    class Decision(models.TextChoices):
+        PENDING = "PENDING", "Pending"
+        SELECTED = "SELECTED", "Selected"
+        REJECTED = "REJECTED", "Rejected"
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
     # Contact
@@ -55,6 +60,12 @@ class Application(models.Model):
 
     # Q30: file upload
     cv = models.FileField(upload_to="cvs/", blank=False, null=False)
+
+    # Staff review outcome (set from the staff panel).
+    decision = models.CharField(
+        max_length=10, choices=Decision.choices, default=Decision.PENDING
+    )
+    decision_at = models.DateTimeField(null=True, blank=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
 

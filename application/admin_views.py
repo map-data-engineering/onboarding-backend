@@ -10,6 +10,7 @@ All endpoints except login require an authenticated staff user (is_staff=True).
 
 from django.contrib.auth import authenticate
 from django.shortcuts import get_object_or_404
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
@@ -112,13 +113,78 @@ def admin_applications(request):
     return paginator.get_paginated_response(serializer.data)
 
 
-@api_view(["GET"])
+@api_view(["GET", "PATCH", "DELETE"])
 @permission_classes([IsAdminUser])
 def admin_application_detail(request, application_id):
-    """Full applicant record + CV URL + quiz summary."""
+    """
+    GET    -> full applicant record + CV URL + quiz summary
+    PATCH  -> update the review decision ({"decision": "SELECTED"|"REJECTED"|"PENDING"})
+    DELETE -> delete the applicant (and their uploaded CV + quiz, via cascade)
+    """
     application = get_object_or_404(Application, pk=application_id)
+
+    if request.method == "DELETE":
+        if application.cv:
+            application.cv.delete(save=False)  # remove the file from disk too
+        application.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
+
+    if request.method == "PATCH":
+        decision = request.data.get("decision")
+        valid = {c[0] for c in Application.Decision.choices}
+        if decision not in valid:
+            return Response(
+                {"decision": [f"Must be one of {sorted(valid)}."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        application.decision = decision
+        application.decision_at = timezone.now()
+        application.save(update_fields=["decision", "decision_at"])
+
     serializer = ApplicationDetailSerializer(application, context={"request": request})
     return Response(serializer.data)
+
+
+@api_view(["POST"])
+@permission_classes([IsAdminUser])
+def admin_applications_bulk(request):
+    """
+    Act on several applicants at once (used by the staff panel's checkboxes).
+
+    Body: {"ids": ["<uuid>", ...], "action": "select"|"reject"|"pending"|"delete"}
+    """
+    ids = request.data.get("ids") or []
+    action = request.data.get("action")
+    if not ids:
+        return Response(
+            {"detail": "No applicant ids provided."}, status=status.HTTP_400_BAD_REQUEST
+        )
+
+    qs = Application.objects.filter(pk__in=ids)
+
+    if action == "delete":
+        deleted = 0
+        for application in qs:
+            if application.cv:
+                application.cv.delete(save=False)
+            application.delete()
+            deleted += 1
+        return Response({"deleted": deleted})
+
+    action_to_decision = {
+        "select": Application.Decision.SELECTED,
+        "reject": Application.Decision.REJECTED,
+        "pending": Application.Decision.PENDING,
+    }
+    if action in action_to_decision:
+        decision = action_to_decision[action]
+        updated = qs.update(decision=decision, decision_at=timezone.now())
+        return Response({"updated": updated, "decision": decision})
+
+    return Response(
+        {"detail": "action must be one of: select, reject, pending, delete."},
+        status=status.HTTP_400_BAD_REQUEST,
+    )
 
 
 @api_view(["GET"])

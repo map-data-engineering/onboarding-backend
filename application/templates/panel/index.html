@@ -52,17 +52,29 @@
       </div>
     </div>
 
+    <div class="alert alert-danger d-none" id="list-alert"></div>
+
+    <!-- Bulk actions (shown when one or more rows are selected) -->
+    <div class="d-flex align-items-center gap-2 mb-3 d-none" id="bulk-bar">
+      <span class="fw-semibold me-1" id="bulk-count"></span>
+      <button class="btn btn-sm btn-success" data-bulk="select"><i class="bi bi-check2-circle"></i> Mark selected</button>
+      <button class="btn btn-sm btn-danger" data-bulk="reject"><i class="bi bi-x-circle"></i> Mark rejected</button>
+      <button class="btn btn-sm btn-outline-secondary" data-bulk="pending">Reset to pending</button>
+      <button class="btn btn-sm btn-outline-danger ms-auto" data-bulk="delete"><i class="bi bi-trash"></i> Delete</button>
+    </div>
+
     <div class="card shadow-sm">
       <div class="table-responsive">
         <table class="table table-hover align-middle mb-0">
           <thead class="table-light">
             <tr>
+              <th style="width:36px"><input type="checkbox" class="form-check-input" id="select-all" title="Select all"></th>
               <th>Name</th><th>Email</th><th>Institution</th><th>Country</th>
-              <th>Quiz</th><th class="text-center">Score</th><th></th>
+              <th>Quiz</th><th class="text-center">Score</th><th>Decision</th><th></th>
             </tr>
           </thead>
           <tbody id="applicants-body">
-            <tr><td colspan="7" class="text-center text-muted py-4">Loading…</td></tr>
+            <tr><td colspan="9" class="text-center text-muted py-4">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -89,6 +101,21 @@
       <a class="btn btn-outline-primary d-none" id="d-cv" target="_blank" rel="noopener">
         <i class="bi bi-file-earmark-arrow-down"></i> Download CV
       </a>
+    </div>
+
+    <!-- Decision controls -->
+    <div class="alert alert-danger d-none" id="detail-alert"></div>
+    <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
+      <span class="text-muted">Decision:</span>
+      <span id="d-decision"></span>
+      <div class="btn-group btn-group-sm ms-1">
+        <button class="btn btn-outline-success" data-decision="select"><i class="bi bi-check2"></i> Select</button>
+        <button class="btn btn-outline-danger" data-decision="reject"><i class="bi bi-x"></i> Reject</button>
+        <button class="btn btn-outline-secondary" data-decision="pending">Pending</button>
+      </div>
+      <button class="btn btn-sm btn-outline-danger ms-auto" id="d-delete">
+        <i class="bi bi-trash"></i> Delete applicant
+      </button>
     </div>
 
     <ul class="nav nav-tabs mb-3" role="tablist">
