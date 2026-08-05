@@ -14,7 +14,7 @@
     <option name="sessionPaths">
       <map>
         <entry key="24e957c0-43b3-44d7-b745-a8289385ff0e" value="/sessions/8da50dde-4643-4409-bf89-7aae56cd20d5" />
-        <entry key="49bad1b8-0f50-4780-91cd-7cb75b294f66" value="/sessions/9a4c16d3-1936-4b11-9550-d4326924a1a1" />
+        <entry key="49bad1b8-0f50-4780-91cd-7cb75b294f66" value="/switch-account" />
         <entry key="66426c5d-c68b-44e1-921a-1573fca05323" value="/sessions/8b79d0de-9c0c-4de5-97f3-d78d9d697e14" />
         <entry key="99802b53-2e83-4474-94fc-9b4d348ffb1c" value="/sessions/c9ec8f7e-f0e0-4e41-8583-08d7a1fb2eb3" />
         <entry key="cbf77e1f-0800-4db1-b55c-fe36c8fae382" value="/sessions/73ac6a3e-8ca4-43d1-afa0-063b48a90835" />
@@ -23,7 +23,7 @@
     <option name="sessionTitles">
       <map>
         <entry key="24e957c0-43b3-44d7-b745-a8289385ff0e" value="make the cv field not required even when left blan" />
-        <entry key="49bad1b8-0f50-4780-91cd-7cb75b294f66" value="if someon runs out of time the test should auto se" />
+        <entry key="49bad1b8-0f50-4780-91cd-7cb75b294f66" value="localhost:56847/switch-account?workingDir=C%3A%2FUsers%2Fsamzy%2FDocuments%2Fonboarding&amp;panelId=910725f1-7599-4922-8c5d-162d42c70eb6&amp;theme=dark" />
         <entry key="66426c5d-c68b-44e1-921a-1573fca05323" value="use boostrap and make the front end for the app fo" />
         <entry key="99802b53-2e83-4474-94fc-9b4d348ffb1c" value="explain the demo_fill&gt;py file in detail" />
         <entry key="cbf77e1f-0800-4db1-b55c-fe36c8fae382" value="$USER_HOME$/Downloads/files-september-django/ u" />

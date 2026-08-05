@@ -39,6 +39,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # Third party
+    "corsheaders",
     "rest_framework",
     "rest_framework.authtoken",
     # Local
@@ -51,6 +52,7 @@ MIDDLEWARE = [
     # renders correctly even without a web-server static mapping.
     "whitenoise.middleware.WhiteNoiseMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
@@ -144,3 +146,13 @@ REST_FRAMEWORK = {
     "DEFAULT_PAGINATION_CLASS": "rest_framework.pagination.PageNumberPagination",
     "PAGE_SIZE": 25,
 }
+
+CORS_ALLOWED_ORIGINS = [
+    "https://spaat-onboardnig-portal-frontend.vercel.app",
+    "http://localhost:5173",
+    "http://127.0.0.1:5500",
+]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://spaat-onboardnig-portal-frontend-.*\.vercel\.app$",
+]
+CORS_ALLOW_CREDENTIALS = False
