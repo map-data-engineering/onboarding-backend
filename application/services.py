@@ -9,14 +9,22 @@ from datetime import timedelta
 from django.utils import timezone
 from rest_framework.exceptions import ValidationError
 
-from .models import QuizSession, SessionQuestion, Question
+from .models import PASS_MARK, QuizSession, SessionQuestion, Question
 
 # Extra seconds allowed on top of the question limit to absorb network latency,
 # so a genuine answer sent at ~40s isn't rejected because it arrived at 40.6s.
 GRACE_SECONDS = 3
 
-# Minimum score that unlocks the final step (motivation, expectations, CV upload).
-PASS_MARK = 7
+# PASS_MARK lives in models.py -- Application.status is derived from it too -- and
+# is re-exported here, alongside the grading logic that applies it.
+__all__ = [
+    "GRACE_SECONDS",
+    "PASS_MARK",
+    "build_session",
+    "current_item",
+    "has_passed",
+    "submit_answer",
+]
 
 
 def has_passed(session):

@@ -2,7 +2,7 @@
 
 from rest_framework import serializers
 
-from .models import Application, SessionQuestion
+from .models import PASS_MARK, Application, SessionQuestion
 
 
 class ApplicationListSerializer(serializers.ModelSerializer):
@@ -11,6 +11,8 @@ class ApplicationListSerializer(serializers.ModelSerializer):
     quiz_status = serializers.SerializerMethodField()
     score = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
+    # PASS / FAIL / PENDING — derived from the score (see Application.status).
+    status = serializers.CharField(read_only=True)
 
     class Meta:
         model = Application
@@ -22,6 +24,7 @@ class ApplicationListSerializer(serializers.ModelSerializer):
             "institution",
             "country_of_residence",
             "created_at",
+            "status",
             "decision",
             "quiz_status",
             "score",
@@ -55,6 +58,8 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
     score = serializers.SerializerMethodField()
     total = serializers.SerializerMethodField()
     completed_at = serializers.SerializerMethodField()
+    status = serializers.CharField(read_only=True)
+    pass_mark = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -78,6 +83,8 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
             "cv",
             "created_at",
             "final_submitted_at",
+            "status",
+            "pass_mark",
             "decision",
             "decision_at",
             "quiz_status",
@@ -88,6 +95,9 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
 
     def _quiz(self, application):
         return getattr(application, "quiz", None)
+
+    def get_pass_mark(self, application):
+        return PASS_MARK
 
     def get_cv(self, application):
         if not application.cv:

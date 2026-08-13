@@ -68,15 +68,24 @@ document.getElementById("logout-btn").addEventListener("click", async () => {
 // ------------------------------------------------------------------ List
 let currentPage = 1;
 let currentSearch = "";
+let currentStatus = "";
 let pageState = { next: null, previous: null, count: 0 };
 
 const searchInput = document.getElementById("search-input");
+const statusFilter = document.getElementById("status-filter");
 const applicantsBody = document.getElementById("applicants-body");
 
 const QUIZ_BADGE = {
   not_started: '<span class="badge bg-secondary">Not started</span>',
   in_progress: '<span class="badge bg-warning text-dark">In progress</span>',
   completed:   '<span class="badge bg-success">Completed</span>',
+};
+
+// Knowledge-check outcome, derived server-side from the score vs the pass mark.
+const STATUS_BADGE = {
+  PASS:    '<span class="badge bg-success">Pass</span>',
+  FAIL:    '<span class="badge bg-danger">Fail</span>',
+  PENDING: '<span class="badge bg-secondary">Pending</span>',
 };
 
 const DECISION_BADGE = {
@@ -98,9 +107,10 @@ async function loadList() {
   updateBulkBar();
   listAlert.classList.add("d-none");
   document.getElementById("select-all").checked = false;
-  applicantsBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">Loading…</td></tr>`;
+  applicantsBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">Loading…</td></tr>`;
   const params = new URLSearchParams();
   if (currentSearch) params.set("search", currentSearch);
+  if (currentStatus) params.set("status", currentStatus);
   if (currentPage > 1) params.set("page", currentPage);
   const qs = params.toString() ? `?${params}` : "";
   try {
@@ -110,14 +120,14 @@ async function loadList() {
     updatePager();
   } catch (err) {
     if (err.status !== 401) {
-      applicantsBody.innerHTML = `<tr><td colspan="9" class="text-center text-danger py-4">Failed to load applicants.</td></tr>`;
+      applicantsBody.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4">Failed to load applicants.</td></tr>`;
     }
   }
 }
 
 function renderList(rows) {
   if (!rows.length) {
-    applicantsBody.innerHTML = `<tr><td colspan="9" class="text-center text-muted py-4">No applicants found.</td></tr>`;
+    applicantsBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No applicants found.</td></tr>`;
     return;
   }
   applicantsBody.innerHTML = "";
@@ -134,6 +144,7 @@ function renderList(rows) {
       <td>${esc(r.country_of_residence || "")}</td>
       <td>${QUIZ_BADGE[r.quiz_status] || esc(r.quiz_status)}</td>
       <td class="text-center">${score}</td>
+      <td>${STATUS_BADGE[r.status] || esc(r.status || "")}</td>
       <td>${decision}</td>
       <td class="text-end"><i class="bi bi-chevron-right text-muted"></i></td>`;
 
@@ -205,6 +216,12 @@ function updatePager() {
 document.getElementById("prev-page").addEventListener("click", () => { currentPage--; loadList(); });
 document.getElementById("next-page").addEventListener("click", () => { currentPage++; loadList(); });
 
+statusFilter.addEventListener("change", (e) => {
+  currentStatus = e.target.value;
+  currentPage = 1;
+  loadList();
+});
+
 // Debounced search
 let searchTimer = null;
 searchInput.addEventListener("input", (e) => {
@@ -252,6 +269,13 @@ function renderDetail(a) {
   document.getElementById("d-email").textContent = a.email;
   document.getElementById("d-decision").innerHTML =
     DECISION_BADGE[a.decision] || esc(a.decision || "");
+
+  // Pass/fail is derived from the score — show the threshold alongside it.
+  const statusEl = document.getElementById("d-status");
+  const badge = STATUS_BADGE[a.status] || esc(a.status || "");
+  statusEl.innerHTML = a.score != null
+    ? `${badge} <span class="text-muted small">${a.score}/${a.total}, pass mark ${a.pass_mark}</span>`
+    : badge;
 
   const cv = document.getElementById("d-cv");
   if (a.cv) { cv.href = a.cv; cv.classList.remove("d-none"); }

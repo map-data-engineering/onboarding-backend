@@ -22,8 +22,11 @@ Bayesian statistics, and health-application topics.
   time, restart, or reshuffle.
 - **Hidden grading** — correct answers are never sent to the applicant; only the final score is
   revealed at the end.
-- **Custom admin API** — staff-only, token-authenticated endpoints to list applicants, view details +
-  CV, and see a per-question quiz breakdown.
+- **Pass/fail status** — every applicant carries a `status` derived from their score: **Pass**
+  (≥ 7), **Fail** (below 7), or **Pending** (quiz unfinished). Computed on read, so it never drifts
+  from the answers, and kept separate from the staff's own `decision` (Selected/Rejected).
+- **Custom admin API** — staff-only, token-authenticated endpoints to list applicants (searchable and
+  filterable by status), view details + CV, and see a per-question quiz breakdown.
 - **Same-origin frontend** — lightweight HTML/JS pages served by Django, so the browser calls `/api/`
   with no CORS setup.
 
@@ -34,7 +37,8 @@ Bayesian statistics, and health-application topics.
 - **Python 3.12+** (developed on 3.14)
 - **Django 6.0**
 - **Django REST Framework 3.17** (+ `authtoken` for the admin panel)
-- **SQLite** (default; swappable for MySQL/Postgres)
+- **MySQL** in production (PythonAnywhere), **SQLite** locally — selected by `DJANGO_DB_ENGINE`, no
+  code change between the two
 - Vanilla HTML/CSS/JS templates (no frontend build step)
 
 ---
@@ -44,15 +48,16 @@ Bayesian statistics, and health-application topics.
 ```
 onboarding/
 ├── manage.py
-├── requirements.txt
-├── db.sqlite3                     # created on first migrate (git-ignored)
+├── requirements.txt               # base deps (local dev, SQLite)
+├── requirements-prod.txt          # the above + mysqlclient (production)
+├── db.sqlite3                     # local dev only; created on first migrate (git-ignored)
 ├── media/                         # uploaded CVs (git-ignored)
 ├── onboarding/                    # project package
-│   ├── settings.py                # env-driven config (DEBUG, SECRET_KEY, hosts, static/media)
+│   ├── settings.py                # env-driven config (DEBUG, SECRET_KEY, hosts, DB, static/media)
 │   ├── urls.py                    # /admin/, /api/, and the frontend pages
 │   ├── wsgi.py / asgi.py
 ├── application/                   # the app
-│   ├── models.py                  # Question, Application, QuizSession, SessionQuestion
+│   ├── models.py                  # Question, Application (+ PASS_MARK, status), QuizSession, SessionQuestion
 │   ├── services.py                # server-authoritative quiz logic (shuffle, timing, grading)
 │   ├── views.py                   # applicant-facing API (function-based views)
 │   ├── admin_views.py             # staff-only admin API
@@ -111,6 +116,13 @@ Settings read from the environment, with dev-friendly defaults:
 | `DJANGO_SECRET_KEY` | insecure dev key | **set a real key in production** |
 | `DJANGO_ALLOWED_HOSTS` | `localhost,127.0.0.1` | comma-separated hostnames |
 | `DJANGO_CSRF_TRUSTED_ORIGINS` | *(empty)* | e.g. `https://yourdomain` — needed for admin login over HTTPS |
+| `DJANGO_DB_ENGINE` | `sqlite` | set to `mysql` to use MySQL |
+| `DJANGO_DB_NAME` / `_USER` / `_PASSWORD` / `_HOST` | *(empty)* | MySQL connection details |
+| `DJANGO_DB_PORT` | `3306` | MySQL port |
+| `DJANGO_DB_CONN_MAX_AGE` | `60` | connection reuse, in seconds (keep under MySQL's idle timeout) |
+
+MySQL also needs the driver: `pip install -r requirements-prod.txt` (adds `mysqlclient` on top of
+`requirements.txt`).
 
 ---
 
@@ -137,7 +149,7 @@ All endpoints live under `/api/`.
 | POST | `/api/admin/login/` | Staff login → token |
 | POST | `/api/admin/logout/` | Invalidate token |
 | GET | `/api/admin/me/` | Current staff user |
-| GET | `/api/admin/applications/` | List applicants (`?search=`, `?page=`) |
+| GET | `/api/admin/applications/` | List applicants (`?search=`, `?status=pass\|fail\|pending`, `?page=`) |
 | GET | `/api/admin/applications/{id}/` | Applicant detail + CV URL |
 | GET | `/api/admin/applications/{id}/quiz/` | Per-question breakdown |
 
@@ -169,11 +181,11 @@ Full request/response shapes and frontend integration notes are in
 ## Deployment
 
 See [`README_DEPLOY_PYTHONANYWHERE.md`](./README_DEPLOY_PYTHONANYWHERE.md) for a full step-by-step
-PythonAnywhere deployment (SQLite, Python 3.12+).
+PythonAnywhere deployment (MySQL, Python 3.12+).
 
-> **Not suitable for Vercel** as-is: Vercel's serverless filesystem is ephemeral, so SQLite writes
-> and uploaded CVs wouldn't persist. Use a persistent host (PythonAnywhere, Render, Railway, Fly.io)
-> — or migrate to Postgres + object storage first.
+> **Not suitable for Vercel** as-is: Vercel's serverless filesystem is ephemeral, so uploaded CVs
+> wouldn't persist (the database is fine once it's MySQL). Use a persistent host (PythonAnywhere,
+> Render, Railway, Fly.io) — or move media to object storage first.
 
 ---
 

@@ -46,9 +46,17 @@
   <section id="view-list" class="d-none">
     <div class="d-flex justify-content-between align-items-center mb-3">
       <h4 class="mb-0">Applicants</h4>
-      <div class="input-group" style="max-width:340px">
-        <span class="input-group-text"><i class="bi bi-search"></i></span>
-        <input class="form-control" id="search-input" placeholder="Name, email or institution…">
+      <div class="d-flex gap-2">
+        <select class="form-select" id="status-filter" style="max-width:180px" title="Knowledge-check outcome">
+          <option value="">All statuses</option>
+          <option value="pass">Pass</option>
+          <option value="fail">Fail</option>
+          <option value="pending">Pending</option>
+        </select>
+        <div class="input-group" style="max-width:340px">
+          <span class="input-group-text"><i class="bi bi-search"></i></span>
+          <input class="form-control" id="search-input" placeholder="Name, email or institution…">
+        </div>
       </div>
     </div>
 
@@ -70,11 +78,11 @@
             <tr>
               <th style="width:36px"><input type="checkbox" class="form-check-input" id="select-all" title="Select all"></th>
               <th>Name</th><th>Email</th><th>Institution</th><th>Country</th>
-              <th>Quiz</th><th class="text-center">Score</th><th>Decision</th><th></th>
+              <th>Quiz</th><th class="text-center">Score</th><th>Status</th><th>Decision</th><th></th>
             </tr>
           </thead>
           <tbody id="applicants-body">
-            <tr><td colspan="9" class="text-center text-muted py-4">Loading…</td></tr>
+            <tr><td colspan="10" class="text-center text-muted py-4">Loading…</td></tr>
           </tbody>
         </table>
       </div>
@@ -106,7 +114,9 @@
     <!-- Decision controls -->
     <div class="alert alert-danger d-none" id="detail-alert"></div>
     <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
-      <span class="text-muted">Decision:</span>
+      <span class="text-muted">Knowledge check:</span>
+      <span id="d-status"></span>
+      <span class="text-muted ms-3">Decision:</span>
       <span id="d-decision"></span>
       <div class="btn-group btn-group-sm ms-1">
         <button class="btn btn-outline-success" data-decision="select"><i class="bi bi-check2"></i> Select</button>

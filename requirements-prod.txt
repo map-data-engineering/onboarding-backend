@@ -1,0 +1,12 @@
+# Production dependencies (PythonAnywhere): everything in requirements.txt plus
+# the MySQL driver.
+#
+#   pip install -r requirements-prod.txt
+#
+# mysqlclient is kept OUT of requirements.txt because it is a C extension: it
+# needs a matching wheel or MySQL client headers, which local dev machines often
+# lack (e.g. Python 3.14 on Windows). Local development uses SQLite and does not
+# need it -- see the DATABASES block in onboarding/settings.py.
+-r requirements.txt
+
+mysqlclient>=2.2,<3

@@ -81,12 +81,45 @@ WSGI_APPLICATION = "onboarding.wsgi.application"
 ASGI_APPLICATION = "onboarding.asgi.application"
 
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+# --- Database -----------------------------------------------------------------
+# MySQL in production (PythonAnywhere), SQLite locally. Switch by setting
+# DJANGO_DB_ENGINE=mysql; everything else is read from the environment so no
+# credentials live in this file.
+#
+#   DJANGO_DB_ENGINE=mysql
+#   DJANGO_DB_NAME=USER$onboarding
+#   DJANGO_DB_USER=USER
+#   DJANGO_DB_PASSWORD=...
+#   DJANGO_DB_HOST=USER.mysql.pythonanywhere-services.com
+#
+# Requires the mysqlclient driver: pip install -r requirements-prod.txt
+if os.environ.get("DJANGO_DB_ENGINE", "sqlite").lower() in ("mysql", "django.db.backends.mysql"):
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": os.environ.get("DJANGO_DB_NAME", ""),
+            "USER": os.environ.get("DJANGO_DB_USER", ""),
+            "PASSWORD": os.environ.get("DJANGO_DB_PASSWORD", ""),
+            "HOST": os.environ.get("DJANGO_DB_HOST", ""),
+            "PORT": os.environ.get("DJANGO_DB_PORT", "3306"),
+            # Reuse connections, but for less time than PythonAnywhere's MySQL
+            # idle timeout (300s) -- otherwise Django hands out dead sockets.
+            "CONN_MAX_AGE": int(os.environ.get("DJANGO_DB_CONN_MAX_AGE", "60")),
+            "OPTIONS": {
+                "charset": "utf8mb4",  # full Unicode, incl. emoji, in free-text answers
+                # Fail loudly on truncation/bad dates instead of silently coercing.
+                "init_command": "SET sql_mode='STRICT_TRANS_TABLES'",
+            },
+            "TEST": {"CHARSET": "utf8mb4", "COLLATION": "utf8mb4_unicode_ci"},
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
 
 
 AUTH_PASSWORD_VALIDATORS = [

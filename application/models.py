@@ -2,6 +2,11 @@ import uuid
 
 from django.db import models
 
+# Minimum score that counts as a pass: it unlocks the final step (motivation,
+# expectations, CV) and drives Application.status. An absolute count, not a
+# percentage -- revisit it if the number of seeded questions changes.
+PASS_MARK = 7
+
 
 class Question(models.Model):
     """A scored multiple-choice question (the knowledge-check items on the form)."""
@@ -32,6 +37,13 @@ class Application(models.Model):
         PENDING = "PENDING", "Pending"
         SELECTED = "SELECTED", "Selected"
         REJECTED = "REJECTED", "Rejected"
+
+    class Status(models.TextChoices):
+        """Outcome of the knowledge check — derived from the score, never set by hand."""
+
+        PENDING = "PENDING", "Pending"  # quiz not started, or still in progress
+        PASS = "PASS", "Pass"           # score >= PASS_MARK
+        FAIL = "FAIL", "Fail"           # quiz finished below PASS_MARK
 
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
 
@@ -74,6 +86,24 @@ class Application(models.Model):
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} <{self.email}>"
+
+    @property
+    def status(self):
+        """
+        Pass/fail on the knowledge check.
+
+        Derived from the quiz on every read rather than stored, so it can never
+        drift from the actual score (and changing PASS_MARK re-grades everyone).
+        Distinct from `decision`, which is the staff's review outcome.
+        """
+        quiz = getattr(self, "quiz", None)
+        if quiz is None or not quiz.is_complete:
+            return self.Status.PENDING
+        return self.Status.PASS if quiz.score >= PASS_MARK else self.Status.FAIL
+
+    @property
+    def status_display(self):
+        return self.Status(self.status).label
 
 
 class QuizSession(models.Model):

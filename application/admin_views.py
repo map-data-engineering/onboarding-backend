@@ -22,7 +22,7 @@ from .admin_serializers import (
     ApplicationListSerializer,
     SessionQuestionBreakdownSerializer,
 )
-from .models import Application
+from .models import PASS_MARK, Application
 
 
 @api_view(["POST"])
@@ -89,9 +89,10 @@ def admin_applications(request):
 
     Query params:
       ?search=  filter by first/last name, email, or institution (case-insensitive)
+      ?status=  pass | fail | pending  (the knowledge-check outcome)
       ?page=    page number (page size is 25)
     """
-    from django.db.models import Q
+    from django.db.models import Count, Q
 
     qs = Application.objects.select_related("quiz").order_by("-created_at")
 
@@ -102,6 +103,28 @@ def admin_applications(request):
             | Q(last_name__icontains=search)
             | Q(email__icontains=search)
             | Q(institution__icontains=search)
+        )
+
+    # `status` is a derived property (Application.status), so filtering means
+    # re-deriving it in SQL: count the correct answers and compare to PASS_MARK.
+    status_filter = (request.query_params.get("status") or "").lower()
+    if status_filter in {"pass", "fail", "pending"}:
+        finished = Q(quiz__completed_at__isnull=False)
+        if status_filter == "pending":
+            qs = qs.filter(~finished)
+        else:
+            qs = qs.annotate(
+                correct_count=Count("quiz__items", filter=Q(quiz__items__is_correct=True))
+            ).filter(finished)
+            qs = (
+                qs.filter(correct_count__gte=PASS_MARK)
+                if status_filter == "pass"
+                else qs.filter(correct_count__lt=PASS_MARK)
+            )
+    elif status_filter:
+        return Response(
+            {"status": ["Must be one of ['pass', 'fail', 'pending']."]},
+            status=status.HTTP_400_BAD_REQUEST,
         )
 
     # Reuse the project's default PageNumberPagination.

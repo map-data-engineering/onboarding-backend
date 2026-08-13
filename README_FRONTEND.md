@@ -347,6 +347,7 @@ Django admin). Token auth does **not** require a CSRF header.
 **List applicants** — `GET /api/admin/applications/` (paginated, 25/page):
 ```
 ?search=<text>   filter by first/last name, email, or institution
+?status=<value>  pass | fail | pending  (400 on anything else)
 ?page=<n>        page number
 ```
 ```json
@@ -355,19 +356,24 @@ Django admin). Token auth does **not** require a CSRF header.
   "results": [
     { "id": "…", "first_name": "Ada", "last_name": "Lovelace", "email": "…",
       "institution": "…", "country_of_residence": "…", "created_at": "…",
-      "decision": "PENDING", "quiz_status": "completed", "score": 12, "total": 12 }
+      "status": "PASS", "decision": "PENDING", "quiz_status": "completed",
+      "score": 12, "total": 12 }
   ]
 }
 ```
-- `decision` is one of `"PENDING" | "SELECTED" | "REJECTED"`.
+- **`status`** is the knowledge-check outcome: `"PASS"` (score ≥ pass mark), `"FAIL"` (finished
+  below it), or `"PENDING"` (quiz not finished). Derived from the score server-side — read-only, and
+  there is no endpoint to set it.
+- `decision` is one of `"PENDING" | "SELECTED" | "REJECTED"` — the **staff's** review outcome, and a
+  separate thing from `status`. Show both; don't conflate them.
 - `quiz_status` is one of `"not_started" | "in_progress" | "completed"`. `score`/`total` are `null`
   until a quiz exists.
 
 **Applicant detail** — `GET /api/admin/applications/{id}/` → all profile fields + an absolute `cv`
-URL + `decision`, `decision_at`, `final_submitted_at`, and quiz summary (`quiz_status`, `score`,
-`total`, `completed_at`).
+URL + `status`, `pass_mark`, `decision`, `decision_at`, `final_submitted_at`, and quiz summary
+(`quiz_status`, `score`, `total`, `completed_at`).
 
-> Applicants who scored below the pass mark never reach the final step, so their `cv` is `null` and
+> Applicants with `status: "FAIL"` never reach the final step, so their `cv` is `null` and
 > `motivation`/`expectations` are empty, with `final_submitted_at: null`. Handle that in the UI —
 > the shipped panel hides the "Download CV" link and shows "Not submitted".
 
@@ -413,11 +419,13 @@ Returns `404` if the applicant never started the quiz. (Exposes `correct_answer`
 
 ### Suggested admin-panel screens
 1. **Login** → `POST /admin/login/`, store token.
-2. **Applicants table** → `GET /admin/applications/` with search (`?search=`) + pagination.
-   Add row checkboxes + a bulk toolbar (Mark selected / Mark rejected / Reset to pending / Delete)
-   wired to `POST /admin/applications/bulk/`. Show the `decision` as a colored badge.
+2. **Applicants table** → `GET /admin/applications/` with search (`?search=`), a **status filter**
+   (`?status=pass|fail|pending`) and pagination. Add row checkboxes + a bulk toolbar (Mark selected /
+   Mark rejected / Reset to pending / Delete) wired to `POST /admin/applications/bulk/`. Show
+   `status` and `decision` as two separate colored badges.
 3. **Applicant detail** → `GET /admin/applications/{id}/` (fields + "Download CV" link).
-   Add Select / Reject / Pending buttons (`PATCH`) and a Delete button (`DELETE`).
+   Show the `status` badge with `score`/`total` and `pass_mark` next to it, so the outcome is
+   self-explanatory. Add Select / Reject / Pending buttons (`PATCH`) and a Delete button (`DELETE`).
 4. **Quiz breakdown** (tab on the detail page) → `GET /admin/applications/{id}/quiz/`.
 
 > Django's built-in admin at **`/admin/`** also exists (superuser login) and shows the `decision`
@@ -460,7 +468,7 @@ For ready-to-run request examples (Thunder Client), see `README_API_TESTING.md` 
 | POST   | `/api/admin/login/`                           | `{username,password}`  | —               | Staff login → token               |
 | POST   | `/api/admin/logout/`                          | —                      | Token           | Invalidate token                  |
 | GET    | `/api/admin/me/`                              | —                      | Token           | Current staff user                |
-| GET    | `/api/admin/applications/`                    | —                      | Token           | List applicants (`?search=`,`?page=`) |
+| GET    | `/api/admin/applications/`                    | —                      | Token           | List applicants (`?search=`,`?status=`,`?page=`) |
 | POST   | `/api/admin/applications/bulk/`               | `{ids,action}`         | Token           | Bulk select/reject/pending/delete |
 | GET    | `/api/admin/applications/{id}/`               | —                      | Token           | Applicant detail + CV + decision  |
 | PATCH  | `/api/admin/applications/{id}/`               | `{"decision": ""}`     | Token           | Set decision                      |

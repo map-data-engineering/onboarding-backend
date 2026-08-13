@@ -31,6 +31,20 @@ class QuizSessionAdmin(admin.ModelAdmin):
 
 @admin.register(Application)
 class ApplicationAdmin(admin.ModelAdmin):
-    list_display = ("first_name", "last_name", "email", "institution", "decision", "created_at")
+    list_display = (
+        "first_name",
+        "last_name",
+        "email",
+        "institution",
+        "quiz_status",
+        "decision",
+        "created_at",
+    )
     list_filter = ("decision",)
     search_fields = ("first_name", "last_name", "email")
+
+    @admin.display(description="Status")
+    def quiz_status(self, application):
+        # Application.status is derived from the score, so it can't be a
+        # list_filter here -- use the staff panel's ?status= filter for that.
+        return application.status_display
