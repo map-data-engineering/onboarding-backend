@@ -36,8 +36,8 @@ const API = "/api";   // e.g. fetch(`${API}/applications/`)
 > same-origin setup does not.
 
 ### Data formats
-- **Creating an application → `multipart/form-data`** (a CV file is uploaded).
-- **Everything else → `application/json`**.
+- **The final submission → `multipart/form-data`** (the CV file is uploaded there).
+- **Everything else → `application/json`**. (Creating an application accepts either.)
 
 ### Authentication
 - **Applicant** endpoints are **open** — no login, no token. Don't build a login for the portal.
@@ -47,26 +47,38 @@ const API = "/api";   // e.g. fetch(`${API}/applications/`)
 
 ## 2. The applicant flow (end to end)
 
+The intake is **two-stage, gated on the quiz score**. The first form collects contact/profile
+details only. The **motivation, expectations and CV are collected at the very end**, and only from
+applicants who score at least the pass mark (**7**, `services.PASS_MARK`).
+
 Order of API calls:
 
 ```
-Step 1  POST /applications/                              -> create the applicant + upload CV
+Step 1  POST /applications/                              -> create the applicant (details only)
 Step 2  POST /applications/{application_id}/quiz/start/  -> begin the timed quiz, get question #1
 Step 3  (loop) POST /quiz/{session_id}/answer/           -> submit answer, receive next question
-Step 4  GET  /quiz/{session_id}/result/                  -> show final score
+Step 4  GET  /quiz/{session_id}/result/                  -> show final score + `passed`
+Step 5  POST /applications/{application_id}/finalize/    -> motivation + expectations + CV
+        (only if `passed` is true — the server returns 403 otherwise)
 ```
 
 Two IDs to keep in app state:
-- `application_id` — returned by Step 1.
+- `application_id` — returned by Step 1. **Keep it until Step 5**, not just until the quiz starts.
 - `session_id` — returned by Step 2 (the field is named `session`). Used by every quiz call after.
+
+> **The gate is enforced server-side.** Hiding the final form in your UI is a convenience, not the
+> control. `POST /finalize/` independently checks that the quiz is finished and that
+> `score >= pass_mark`.
 
 ---
 
-### Step 1 — Submit the application form
+### Step 1 — Submit the details form
 
-`POST /api/applications/` — send as `multipart/form-data`.
+`POST /api/applications/` — send as `application/json` (or `multipart/form-data`; both are accepted).
+The submit button on this screen should read **"Next"**, not "Submit" — the application isn't
+submitted yet.
 
-**Fields to collect** (all required unless marked optional):
+**Fields to collect** (all required):
 
 | Field                  | Type        | Notes                                    |
 |------------------------|-------------|------------------------------------------|
@@ -83,37 +95,33 @@ Two IDs to keep in app state:
 | `education`            | text        | e.g. BSc / MSc / PhD                      |
 | `r_experience`         | text        | self-rated, e.g. Beginner/Intermediate   |
 | `bayesian_knowledge`   | text        | self-rated                               |
-| `motivation`           | textarea    | **optional**                             |
-| `expectations`         | textarea    | **optional**                             |
-| `cv`                   | **file**    | required — PDF/DOC upload                 |
 
-**Example (browser `FormData`):**
+> **Do not put `motivation`, `expectations` or `cv` on this form.** The endpoint ignores them
+> entirely — they belong to [Step 5](#step-5--final-submission-motivation-expectations-cv).
+
+**Example:**
 
 ```js
-const form = new FormData();
-form.append("first_name", "Ada");
-form.append("last_name", "Lovelace");
-form.append("email", "ada@example.org");
-// ...append every field above...
-form.append("cv", fileInput.files[0]);   // the <input type="file">
-
-const res = await fetch(`${API}/applications/`, { method: "POST", body: form });
-// NOTE: do NOT set Content-Type yourself — the browser sets the multipart boundary.
+const res = await fetch(`${API}/applications/`, {
+  method: "POST",
+  headers: { "Content-Type": "application/json" },
+  body: JSON.stringify({ first_name: "Ada", last_name: "Lovelace", email: "ada@example.org", /* … */ }),
+});
 
 if (res.status === 201) {
   const app = await res.json();
-  const applicationId = app.id;   // <-- save this
+  const applicationId = app.id;   // <-- save this; you need it again at Step 5
 }
 ```
 
-**Success:** `201 Created` with the full application JSON (`id`, a `cv` URL, `created_at`, and the
-staff-review fields `decision` (defaults to `"PENDING"`) and `decision_at` (`null`) — the applicant
-UI can ignore those two).
+**Success:** `201 Created` with the application JSON (`id`, `created_at`, and the staff-review fields
+`decision` (defaults to `"PENDING"`) and `decision_at` (`null`) — the applicant UI can ignore those
+two). `motivation`, `expectations` and `cv` are **not** in this response; they don't exist yet.
 
 **Validation errors:** `400 Bad Request` with a field→messages map:
 
 ```json
-{ "email": ["Enter a valid email address."], "cv": ["No file was submitted."] }
+{ "email": ["Enter a valid email address."] }
 ```
 
 ---
@@ -198,24 +206,111 @@ question, or the result object if the quiz is already done. Persist `session_id`
 
 ### Step 4 — Show the result
 
-`GET /api/quiz/{session_id}/result/`
+`GET /api/quiz/{session_id}/result/` (the same object also arrives as `result` on the final answer):
 
 ```json
-{ "id": "90adba6d-…", "score": 12, "total": 12, "completed_at": "2026-07-28T12:10:29.840Z" }
+{
+  "id": "90adba6d-…",
+  "application": "f9ce179f-…",
+  "score": 9,
+  "total": 12,
+  "completed_at": "2026-07-28T12:10:29.840Z",
+  "passed": true,
+  "pass_mark": 7,
+  "final_submitted": false
+}
 ```
 
-`completed_at` is `null` if not finished yet.
+- `completed_at` is `null` if the quiz isn't finished yet.
+- **`passed`** — `true` once the quiz is complete with `score >= pass_mark`. This is what unlocks
+  Step 5. Read the flag; don't hard-code `7` in the frontend.
+- **`final_submitted`** — `true` once Step 5 has been completed, so a reload doesn't offer the form
+  again.
+- `application` is the applicant's id — handy for Step 5 if you lost it.
+
+Drive the results screen from these:
+
+```js
+const unlocked = result.passed && !result.final_submitted;
+// unlocked -> show a "Continue to final step" button
+// !result.passed -> "A score of at least ${result.pass_mark} is needed to continue." and stop here
+```
+
+---
+
+### Step 5 — Final submission (motivation, expectations, CV)
+
+`POST /api/applications/{application_id}/finalize/` — send as `multipart/form-data`.
+
+| Field          | Type     | Notes                     |
+|----------------|----------|---------------------------|
+| `motivation`   | textarea | required, non-blank       |
+| `expectations` | textarea | required, non-blank       |
+| `cv`           | **file** | required — PDF/DOC upload |
+
+```js
+const form = new FormData();
+form.append("motivation", motivationEl.value);
+form.append("expectations", expectationsEl.value);
+form.append("cv", fileInput.files[0]);
+
+const res = await fetch(`${API}/applications/${applicationId}/finalize/`, {
+  method: "POST",
+  body: form,   // do NOT set Content-Type — the browser sets the multipart boundary
+});
+```
+
+**Responses:**
+
+| Status | Meaning |
+|--------|---------|
+| `200` | Submitted. Body: `{ id, submitted_at, motivation, expectations, cv }`. Show the "application submitted" screen and clear the saved ids. |
+| `403` | The quiz isn't finished, or the score is below the pass mark. `{"detail": "…"}` |
+| `400` | Validation errors (field→messages), or `{"detail": "This application has already been submitted."}` |
+| `404` | Unknown `application_id` — clear stored state and send them back to Step 1. |
+
+> **One submission only.** There is no edit/resubmit endpoint; a second `POST` returns `400`.
+
+---
+
+### Resuming after a reload
+
+Persist `application_id` and `session_id` in `localStorage` — but **validate them with the server
+before resuming**, or a deleted/stale record leaves the user stranded on a screen they can't get out
+of.
+
+`GET /api/applications/{application_id}/status/`:
+
+```json
+{ "id": "f9ce179f-…", "final_submitted": false, "quiz": { …the result object above…, } }
+```
+
+`quiz` is `null` if the quiz hasn't been started. A **`404` means the stored id is stale** — clear
+`localStorage` and start over at Step 1. The shipped `applicant.js` boots like this:
+
+```
+no application_id            -> details form
+GET /status/ 404             -> clear state, details form
+final_submitted              -> "submitted" screen
+quiz === null                -> quiz intro
+quiz.completed_at            -> results screen (which may unlock Step 5)
+otherwise                    -> GET /quiz/{id}/current/ and render the current question
+```
 
 ---
 
 ## 3. Suggested applicant-portal screens
 
-1. **Application form** → Step 1. On success, store `application_id`, go to (2).
+1. **Details form** → Step 1. Button reads **"Next"**. On success, store `application_id`, go to (2).
 2. **Quiz intro** ("40s per question, no going back") → button calls Step 2.
 3. **Quiz question** → renders one question + countdown + options; submit calls Step 3; auto-advances.
-4. **Results** → Step 4.
+4. **Results** → Step 4. Shows the score. If `passed && !final_submitted`, offer "Continue to final
+   step"; otherwise the journey ends here.
+5. **Final step** → the motivation/expectations/CV form. This is where the button says
+   **"Submit application"** → Step 5, then a confirmation screen.
 
-Persist in `localStorage`: `application_id`, `session_id` — that lets you resume a quiz.
+Persist in `localStorage`: `application_id`, `session_id` — validate them via `/status/` on load
+(see [Resuming after a reload](#resuming-after-a-reload)).
 
 ---
 
@@ -269,7 +364,12 @@ Django admin). Token auth does **not** require a CSRF header.
   until a quiz exists.
 
 **Applicant detail** — `GET /api/admin/applications/{id}/` → all profile fields + an absolute `cv`
-URL + `decision`, `decision_at`, and quiz summary (`quiz_status`, `score`, `total`, `completed_at`).
+URL + `decision`, `decision_at`, `final_submitted_at`, and quiz summary (`quiz_status`, `score`,
+`total`, `completed_at`).
+
+> Applicants who scored below the pass mark never reach the final step, so their `cv` is `null` and
+> `motivation`/`expectations` are empty, with `final_submitted_at: null`. Handle that in the UI —
+> the shipped panel hides the "Download CV" link and shows "Not submitted".
 
 **Update decision** — `PATCH /api/admin/applications/{id}/`
 ```js
@@ -350,11 +450,13 @@ For ready-to-run request examples (Thunder Client), see `README_API_TESTING.md` 
 
 | Method | Path                                          | Body                   | Auth            | Purpose                          |
 |--------|-----------------------------------------------|------------------------|-----------------|----------------------------------|
-| POST   | `/api/applications/`                          | multipart form         | —               | Create applicant + upload CV     |
+| POST   | `/api/applications/`                          | JSON (details only)    | —               | Create applicant — no CV/free text |
+| GET    | `/api/applications/{id}/status/`              | —                      | —               | Resume state (404 = stale id)     |
 | POST   | `/api/applications/{id}/quiz/start/`          | —                      | —               | Start quiz, get question #1       |
 | GET    | `/api/quiz/{session}/current/`                | —                      | —               | Current question (or result)      |
 | POST   | `/api/quiz/{session}/answer/`                 | `{"answer": ""}`       | —               | Submit answer, get next question  |
-| GET    | `/api/quiz/{session}/result/`                 | —                      | —               | Final score                       |
+| GET    | `/api/quiz/{session}/result/`                 | —                      | —               | Final score + `passed`/`pass_mark` |
+| POST   | `/api/applications/{id}/finalize/`            | multipart form         | —               | Final submit: motivation, expectations, CV (403 if not passed) |
 | POST   | `/api/admin/login/`                           | `{username,password}`  | —               | Staff login → token               |
 | POST   | `/api/admin/logout/`                          | —                      | Token           | Invalidate token                  |
 | GET    | `/api/admin/me/`                              | —                      | Token           | Current staff user                |

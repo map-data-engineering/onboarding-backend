@@ -77,6 +77,7 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
             "expectations",
             "cv",
             "created_at",
+            "final_submitted_at",
             "decision",
             "decision_at",
             "quiz_status",

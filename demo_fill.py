@@ -3,11 +3,13 @@
 Demo API fill for the onboarding application flow.
 
 Drives the public API exactly like a real client would:
-    1. POST /api/applications/                       -> create applicant + upload CV
+    1. POST /api/applications/                       -> create applicant (details only)
     2. POST /api/applications/<id>/quiz/start/        -> build the shuffled session
     3. GET  /api/quiz/<session>/current/             -> fetch the current question
     4. POST /api/quiz/<session>/answer/              -> submit an answer  (repeat)
     5. GET  /api/quiz/<session>/result/              -> final score
+    6. POST /api/applications/<id>/finalize/          -> motivation + expectations + CV
+                                                        (only if the score passed)
 
 Usage:
     # 1. start the server in one terminal:
@@ -46,6 +48,10 @@ APPLICANT = {
     "education": "PhD",
     "r_experience": "Intermediate",
     "bayesian_knowledge": "Beginner",
+}
+
+# Collected in the final step, after the quiz has been passed.
+FINAL_STEP = {
     "motivation": "I want to apply spatial Bayesian methods to malaria risk mapping.",
     "expectations": "Hands-on experience with sf, ggplot2 and Bayesian workflows in R.",
 }
@@ -119,14 +125,11 @@ def main():
     answer_key = _load_answer_key() if args.answers == "correct" else {}
 
     print(f"-> Creating application at {base}/api/applications/ ...")
-    body, content_type = _encode_multipart(
-        APPLICANT, "cv", "ada_lovelace_cv.txt", CV_BYTES
-    )
     status, app = _request(
         "POST",
         f"{base}/api/applications/",
-        data=body,
-        headers={"Content-Type": content_type},
+        data=json.dumps(APPLICANT).encode(),
+        headers={"Content-Type": "application/json"},
     )
     if status != 201:
         print(f"[x] Failed to create application ({status}): {app}")
@@ -177,6 +180,28 @@ def main():
     print(f"\n-> Fetching result ({answered} answered) ...")
     status, result = _request("GET", f"{base}/api/quiz/{session_id}/result/")
     print(f"  [ok] Score: {result['score']} / {result['total']}  (completed_at={result['completed_at']})")
+
+    if not result.get("passed"):
+        print(
+            f"  [--] Score below the pass mark ({result.get('pass_mark')}) -- "
+            f"the final step stays locked."
+        )
+        return
+
+    print("\n-> Submitting the final step (motivation, expectations, CV) ...")
+    body, content_type = _encode_multipart(
+        FINAL_STEP, "cv", "ada_lovelace_cv.txt", CV_BYTES
+    )
+    status, final = _request(
+        "POST",
+        f"{base}/api/applications/{application_id}/finalize/",
+        data=body,
+        headers={"Content-Type": content_type},
+    )
+    if status != 200:
+        print(f"[x] Final submission rejected ({status}): {final}")
+        sys.exit(1)
+    print(f"  [ok] Application submitted at {final['submitted_at']} (cv={final['cv']})")
 
 
 if __name__ == "__main__":

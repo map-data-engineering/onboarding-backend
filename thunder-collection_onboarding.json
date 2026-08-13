@@ -4,15 +4,27 @@
   "dateExported": "2026-07-30T00:00:00.000Z",
   "version": "1.2",
   "folders": [
-    { "_id": "fld-applicant", "name": "Applicant Flow", "containerId": "", "created": "2026-07-30T00:00:00.000Z", "sortNum": 10000 },
-    { "_id": "fld-admin", "name": "Admin Panel", "containerId": "", "created": "2026-07-30T00:00:00.000Z", "sortNum": 20000 }
+    {
+      "_id": "fld-applicant",
+      "name": "Applicant Flow",
+      "containerId": "",
+      "created": "2026-07-30T00:00:00.000Z",
+      "sortNum": 10000
+    },
+    {
+      "_id": "fld-admin",
+      "name": "Admin Panel",
+      "containerId": "",
+      "created": "2026-07-30T00:00:00.000Z",
+      "sortNum": 20000
+    }
   ],
   "requests": [
     {
       "_id": "req-create-application",
       "colId": "col-onboarding-0001",
       "containerId": "fld-applicant",
-      "name": "1. Create Application (upload CV)",
+      "name": "1. Create Application (details only)",
       "url": "http://127.0.0.1:8000/api/applications/",
       "method": "POST",
       "sortNum": 10000,
@@ -24,25 +36,60 @@
         "type": "formdata",
         "raw": "",
         "form": [
-          { "name": "first_name", "value": "Ada" },
-          { "name": "last_name", "value": "Lovelace" },
-          { "name": "email", "value": "ada@example.org" },
-          { "name": "phone", "value": "+441234567890" },
-          { "name": "nationality", "value": "British" },
-          { "name": "country_of_residence", "value": "UK" },
-          { "name": "gender", "value": "Female" },
-          { "name": "institution", "value": "AEI" },
-          { "name": "institution_type", "value": "University" },
-          { "name": "role", "value": "Scientist" },
-          { "name": "education", "value": "PhD" },
-          { "name": "r_experience", "value": "Intermediate" },
-          { "name": "bayesian_knowledge", "value": "Beginner" },
-          { "name": "motivation", "value": "Spatial Bayesian methods" },
-          { "name": "expectations", "value": "Hands-on R" }
+          {
+            "name": "first_name",
+            "value": "Ada"
+          },
+          {
+            "name": "last_name",
+            "value": "Lovelace"
+          },
+          {
+            "name": "email",
+            "value": "ada@example.org"
+          },
+          {
+            "name": "phone",
+            "value": "+441234567890"
+          },
+          {
+            "name": "nationality",
+            "value": "British"
+          },
+          {
+            "name": "country_of_residence",
+            "value": "UK"
+          },
+          {
+            "name": "gender",
+            "value": "Female"
+          },
+          {
+            "name": "institution",
+            "value": "AEI"
+          },
+          {
+            "name": "institution_type",
+            "value": "University"
+          },
+          {
+            "name": "role",
+            "value": "Scientist"
+          },
+          {
+            "name": "education",
+            "value": "PhD"
+          },
+          {
+            "name": "r_experience",
+            "value": "Intermediate"
+          },
+          {
+            "name": "bayesian_knowledge",
+            "value": "Beginner"
+          }
         ],
-        "files": [
-          { "name": "cv", "value": "" }
-        ]
+        "files": []
       },
       "tests": []
     },
@@ -58,7 +105,11 @@
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -73,7 +124,11 @@
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -107,7 +162,64 @@
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
+      "tests": []
+    },
+    {
+      "_id": "req-finalize-application",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "6. Finalize Application (CV + free text; needs score >= 7)",
+      "url": "http://127.0.0.1:8000/api/applications/PASTE_APPLICATION_ID/finalize/",
+      "method": "POST",
+      "sortNum": 60000,
+      "created": "2026-08-13T00:00:00.000Z",
+      "modified": "2026-08-13T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "formdata",
+        "raw": "",
+        "form": [
+          {
+            "name": "motivation",
+            "value": "Spatial Bayesian methods"
+          },
+          {
+            "name": "expectations",
+            "value": "Hands-on R"
+          }
+        ],
+        "files": [
+          {
+            "name": "cv",
+            "value": ""
+          }
+        ]
+      },
+      "tests": []
+    },
+    {
+      "_id": "req-application-status",
+      "colId": "col-onboarding-0001",
+      "containerId": "fld-applicant",
+      "name": "7. Application Status (resume state)",
+      "url": "http://127.0.0.1:8000/api/applications/PASTE_APPLICATION_ID/status/",
+      "method": "GET",
+      "sortNum": 70000,
+      "created": "2026-08-13T00:00:00.000Z",
+      "modified": "2026-08-13T00:00:00.000Z",
+      "headers": [],
+      "params": [],
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -140,12 +252,23 @@
       "created": "2026-07-30T00:00:00.000Z",
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [
-        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+        {
+          "name": "Authorization",
+          "value": "Token PASTE_TOKEN_HERE"
+        }
       ],
       "params": [
-        { "name": "search", "value": "", "isDisabled": true }
+        {
+          "name": "search",
+          "value": "",
+          "isDisabled": true
+        }
       ],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -159,10 +282,17 @@
       "created": "2026-07-30T00:00:00.000Z",
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [
-        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+        {
+          "name": "Authorization",
+          "value": "Token PASTE_TOKEN_HERE"
+        }
       ],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -176,10 +306,17 @@
       "created": "2026-07-30T00:00:00.000Z",
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [
-        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+        {
+          "name": "Authorization",
+          "value": "Token PASTE_TOKEN_HERE"
+        }
       ],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -193,10 +330,17 @@
       "created": "2026-07-30T00:00:00.000Z",
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [
-        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+        {
+          "name": "Authorization",
+          "value": "Token PASTE_TOKEN_HERE"
+        }
       ],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     },
     {
@@ -210,10 +354,17 @@
       "created": "2026-07-30T00:00:00.000Z",
       "modified": "2026-07-30T00:00:00.000Z",
       "headers": [
-        { "name": "Authorization", "value": "Token PASTE_TOKEN_HERE" }
+        {
+          "name": "Authorization",
+          "value": "Token PASTE_TOKEN_HERE"
+        }
       ],
       "params": [],
-      "body": { "type": "none", "raw": "", "form": [] },
+      "body": {
+        "type": "none",
+        "raw": "",
+        "form": []
+      },
       "tests": []
     }
   ]

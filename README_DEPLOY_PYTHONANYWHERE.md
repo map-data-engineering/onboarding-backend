@@ -132,6 +132,10 @@ on the **Web** tab → **Static files** section:
 
 This makes the `cv` download links (returned by the admin API and shown in the staff panel) work.
 
+> **Note:** CVs are uploaded at the *end* of the journey, and only by applicants who pass the quiz
+> (see [section 12](#12-the-pass-mark-gate)). An applicant who scored below the pass mark has no CV
+> at all — the panel shows no download link for them. That is expected, not a broken mapping.
+
 > Optionally, you may also map `/static/` → `/home/USER/onboarding-/staticfiles` so PythonAnywhere
 > serves static files directly (slightly faster than WhiteNoise). It is not required.
 
@@ -189,6 +193,17 @@ python manage.py collectstatic --noinput  # only if static files or templates ch
 
 Then click **Reload** on the **Web** tab. A reload is required for any change to take effect.
 
+> **Upgrading to the two-stage intake:** this release ships migration
+> `0004_application_final_submitted_at_alter_application_cv`, so `migrate` is **required**, and the
+> applicant JS changed, so `collectstatic` is too. The migration makes `cv` optional at the database
+> level and adds `final_submitted_at` — it is additive and does not touch existing rows, so
+> applications submitted under the old single-form flow keep their CV and simply show a blank
+> `final_submitted_at`.
+>
+> Applicants whose browsers hold a half-finished journey in `localStorage` are handled
+> automatically: the portal validates the stored id against `/api/applications/{id}/status/` on load
+> and restarts them at the details form if it is stale.
+
 ---
 
 ## 10. Troubleshooting
@@ -199,6 +214,9 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | Admin login fails with a **CSRF** error | Trusted origin not set | Set `DJANGO_CSRF_TRUSTED_ORIGINS=https://USER.pythonanywhere.com`, then Reload |
 | Pages load but have **no styling** | `collectstatic` not run | Run `python manage.py collectstatic --noinput`, then Reload |
 | Uploaded CV links return **404** | `/media/` mapping missing | Add the `/media/` static-files mapping (step 6) |
+| An applicant has **no CV / empty motivation** | They scored below the pass mark, so the final step never unlocked | Expected — check their score on the detail page |
+| Final step returns **403** | Quiz unfinished, or score below the pass mark | Expected — the gate is server-side (section 12) |
+| Portal **skips the details form** and 404s on quiz start | Stale `application_id` in the browser's `localStorage` (e.g. the applicant was deleted) | Fixed in the current release — the portal validates via `/api/applications/{id}/status/`. Make sure `collectstatic` ran and the browser reloaded the new `applicant.js` |
 | Any page returns **HTTP 500** | See the error log | **Web** tab → *Error log*; usually a missing env var or an unmigrated database |
 | `ModuleNotFoundError` | Wrong virtualenv or missing deps | Confirm the virtualenv path on the Web tab; run `pip install -r requirements.txt` |
 | Changes don't appear | App not reloaded | Click **Reload** on the Web tab after every change |
@@ -212,6 +230,32 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
   console) to keep backups. Do not commit them to the repository.
 - **Rotating the secret key:** generate a new key (step 3), update `DJANGO_SECRET_KEY` in the WSGI
   file, and Reload. Note this invalidates existing sessions.
+
+---
+
+## 12. The pass-mark gate
+
+The applicant journey is **two-stage**: the first form collects contact/profile details only, then
+the quiz runs, and the **motivation, expectations and CV upload are only offered to applicants who
+score at least the pass mark**.
+
+The pass mark is a constant in the code, not an environment variable:
+
+```python
+# application/services.py
+PASS_MARK = 7        # out of 12 seeded questions
+```
+
+To change it, edit that line, `git pull` on the server, and **Reload**. No migration is needed. The
+value is exposed to the frontend as `pass_mark` on the quiz result, so the portal's messaging follows
+it automatically — there is nothing to change in the templates.
+
+The gate is enforced in `POST /api/applications/{id}/finalize/`, which returns **403** unless the
+quiz is complete with `score >= PASS_MARK`. Hiding the form in the browser is a convenience only, so
+a tampered client still cannot upload a CV without passing.
+
+> If you change the number of seeded questions in `seed_questions.py`, revisit `PASS_MARK` — it is an
+> absolute count, not a percentage.
 
 ---
 

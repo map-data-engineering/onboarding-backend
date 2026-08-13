@@ -4,8 +4,12 @@ from . import admin_views, views
 
 urlpatterns = [
     # ---- Applicant-facing (open) ----
-    # Submit the applicant + CV
+    # Step 1: contact + profile (no CV yet)
     path("applications/", views.application_create),
+    # Where the applicant is in the journey (used to resume after a reload)
+    path("applications/<uuid:application_id>/status/", views.application_status),
+    # Final step: motivation, expectations + CV — only if the quiz was passed
+    path("applications/<uuid:application_id>/finalize/", views.application_finalize),
     # Begin the timed, shuffled quiz for that applicant
     path("applications/<uuid:application_id>/quiz/start/", views.quiz_start),
     # One-question-at-a-time flow

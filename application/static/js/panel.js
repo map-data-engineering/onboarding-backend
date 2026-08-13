@@ -223,6 +223,7 @@ const FIELD_LABELS = {
   role: "Role", education: "Education", r_experience: "R experience",
   bayesian_knowledge: "Bayesian knowledge", motivation: "Motivation",
   expectations: "Expectations", created_at: "Applied at",
+  final_submitted_at: "Final submission",
 };
 
 let currentDetailId = null;
@@ -261,7 +262,10 @@ function renderDetail(a) {
   Object.entries(FIELD_LABELS).forEach(([key, label]) => {
     if (!(key in a)) return;
     let val = a[key];
-    if (key === "created_at" && val) val = new Date(val).toLocaleString();
+    if ((key === "created_at" || key === "final_submitted_at") && val) {
+      val = new Date(val).toLocaleString();
+    }
+    if (key === "final_submitted_at" && !val) val = "Not submitted";
     dl.insertAdjacentHTML("beforeend",
       `<dt class="col-sm-3 text-muted">${label}</dt>
        <dd class="col-sm-9">${val ? esc(String(val)) : "<span class='text-muted'>—</span>"}</dd>`);

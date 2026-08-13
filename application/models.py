@@ -54,12 +54,15 @@ class Application(models.Model):
     r_experience = models.CharField(max_length=30)
     bayesian_knowledge = models.CharField(max_length=30)
 
-    # Free text
+    # Free text — collected in the final step, only for applicants who pass the quiz.
     motivation = models.TextField(blank=True)
     expectations = models.TextField(blank=True)
 
-    # Q30: file upload
-    cv = models.FileField(upload_to="cvs/", blank=False, null=False)
+    # File upload — also collected in the final step (see PASS_MARK in services.py).
+    cv = models.FileField(upload_to="cvs/", blank=True)
+
+    # Set when the applicant completes the final step (motivation/expectations/CV).
+    final_submitted_at = models.DateTimeField(null=True, blank=True)
 
     # Staff review outcome (set from the staff panel).
     decision = models.CharField(

@@ -15,6 +15,14 @@ from .models import QuizSession, SessionQuestion, Question
 # so a genuine answer sent at ~40s isn't rejected because it arrived at 40.6s.
 GRACE_SECONDS = 3
 
+# Minimum score that unlocks the final step (motivation, expectations, CV upload).
+PASS_MARK = 7
+
+
+def has_passed(session):
+    """True once the quiz is finished with at least PASS_MARK correct answers."""
+    return session.is_complete and session.score >= PASS_MARK
+
 
 def build_session(application):
     """Create the one-and-only session for an application with a shuffled order."""

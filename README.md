@@ -1,9 +1,10 @@
 # Onboarding Portal
 
 A Django + Django REST Framework application for running an **applicant intake + timed knowledge
-check**. Candidates fill in an application form (with a CV upload), then take a **shuffled,
-per-question timed quiz** whose clock is enforced by the server. Staff review applicants and scores
-through a **custom token-authenticated admin API** (and a built-in admin panel).
+check**. Candidates fill in their details, take a **shuffled, per-question timed quiz** whose clock
+is enforced by the server, and — only if they score at least the pass mark — complete their
+application with their motivation, expectations and CV. Staff review applicants and scores through a
+**custom token-authenticated admin API** (and a built-in admin panel).
 
 Originally built as an onboarding/recruitment tool for applicants in R programming, spatial data,
 Bayesian statistics, and health-application topics.
@@ -12,7 +13,10 @@ Bayesian statistics, and health-application topics.
 
 ## Features
 
-- **Applicant intake** — full contact/profile form with a required CV file upload.
+- **Two-stage intake** — the first form collects contact/profile details only. The motivation,
+  expectations and CV upload are gated behind the quiz and are collected in a final step, unlocked
+  only for applicants scoring **7 or more** (`services.PASS_MARK`). The gate is enforced
+  server-side, not just hidden in the UI.
 - **Timed quiz** — one question at a time, shuffled once per applicant and frozen. The 40s-per-question
   deadline (plus a 3s network grace) is **server-authoritative**: the client can't grant itself more
   time, restart, or reshuffle.
@@ -118,11 +122,13 @@ All endpoints live under `/api/`.
 
 | Method | Path | Purpose |
 |--------|------|---------|
-| POST | `/api/applications/` | Create applicant + upload CV (multipart) |
+| POST | `/api/applications/` | Create applicant — contact + profile only |
+| GET | `/api/applications/{id}/status/` | Where the applicant is in the journey (client resume; 404 = stale id) |
 | POST | `/api/applications/{id}/quiz/start/` | Start the shuffled quiz |
 | GET | `/api/quiz/{session}/current/` | Current question (or result) |
 | POST | `/api/quiz/{session}/answer/` | Submit an answer, get the next |
-| GET | `/api/quiz/{session}/result/` | Final score |
+| GET | `/api/quiz/{session}/result/` | Final score (+ `passed`, `pass_mark`) |
+| POST | `/api/applications/{id}/finalize/` | Final submission: motivation, expectations + CV (multipart). **403** unless the quiz is complete with a score ≥ `pass_mark` |
 
 **Admin panel (staff-only, `Authorization: Token <token>`):**
 
@@ -142,8 +148,8 @@ Full request/response shapes and frontend integration notes are in
 
 ## Testing the API
 
-- **Fast end-to-end check:** `python demo_fill.py` creates an applicant, takes the whole quiz, and
-  prints the score (`Score: 12 / 12`). Options: `--base-url`, `--answers correct|first`.
+- **Fast end-to-end check:** `python demo_fill.py` creates an applicant, takes the whole quiz, prints
+  the score (`Score: 12 / 12`), then submits the final step (motivation, expectations, CV). Options: `--base-url`, `--answers correct|first`.
 - **Manual / exploratory:** a Thunder Client collection (`thunder-collection_onboarding.json`) and a
   step-by-step guide are provided in `README_API_TESTING.md` (kept locally).
 
