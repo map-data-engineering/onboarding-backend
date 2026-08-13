@@ -394,7 +394,10 @@ the quiz is complete with `score >= PASS_MARK`. Hiding the form in the browser i
 so a tampered client still cannot upload a CV without passing.
 
 > If you change the number of seeded questions in `seed_questions.py`, revisit `PASS_MARK` — it is an
-> absolute count, not a percentage.
+> absolute count, not a percentage. Re-running `seed_questions` after editing that list updates
+> changed questions and retires removed ones (`is_active=False`, so past quizzes stay auditable);
+> **already-completed quizzes keep their original questions and scores**, so a status can change only
+> if you move `PASS_MARK` itself.
 
 ---
 

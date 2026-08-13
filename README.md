@@ -6,8 +6,8 @@ is enforced by the server, and — only if they score at least the pass mark —
 application with their motivation, expectations and CV. Staff review applicants and scores through a
 **custom token-authenticated admin API** (and a built-in admin panel).
 
-Originally built as an onboarding/recruitment tool for applicants in R programming, spatial data,
-Bayesian statistics, and health-application topics.
+Originally built as an onboarding/recruitment tool for applicants in R programming, spatial data and
+Bayesian statistics.
 
 ---
 
@@ -171,10 +171,22 @@ Full request/response shapes and frontend integration notes are in
 
 | Command | Description |
 |---------|-------------|
-| `python manage.py seed_questions` | Load/refresh the 12 quiz questions (idempotent) |
+| `python manage.py seed_questions` | Load/refresh the 12 quiz questions (idempotent — see below) |
 | `python manage.py migrate` | Apply database migrations |
 | `python manage.py collectstatic` | Gather static files (for production) |
 | `python manage.py createsuperuser` | Create a staff/admin account |
+
+### Editing the question set
+
+`application/management/commands/seed_questions.py` holds the canonical list, transcribed from
+*Onboarding Portal — Knowledge Check Questions* (2 R, 4 spatial, 6 Bayesian). Edit that list and
+re-run `seed_questions`: it **updates** existing questions in place (matched on their text) and
+**retires** anything no longer listed — setting `is_active=False` rather than deleting, since
+`build_session` only serves active questions while past quizzes must stay auditable. Questions never
+used in a quiz are deleted outright; pass `--keep-retired` to always deactivate instead.
+
+Changing the number of questions affects the pass mark, which is an absolute count (`PASS_MARK = 7`
+in `application/models.py`), not a percentage.
 
 ---
 
