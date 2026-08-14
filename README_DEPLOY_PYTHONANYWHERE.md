@@ -243,14 +243,23 @@ Static files (CSS/JS, including the app's own stylesheet and the Django admin as
 **WhiteNoise**, which is already configured in the project — no web-server mapping is required for
 them.
 
-Uploaded **media** (applicant CVs) are *not* served by WhiteNoise, so add one static-files mapping
-on the **Web** tab → **Static files** section:
+Uploaded **media** (applicant CVs) needs **no mapping at all**. CVs are downloaded through the
+staff-only API endpoint `GET /api/admin/applications/{id}/cv/`, which streams the file from
+`MEDIA_ROOT` after checking the caller's staff token.
 
-| URL | Directory |
-|-----|-----------|
-| `/media/` | `/home/MAPDET/onboarding-backend/media` |
+> **Do not add a `/media/` static-files mapping.** Earlier versions of this guide did, because the
+> panel linked straight at `MEDIA_URL`. That mapping has PythonAnywhere's webserver serve the folder
+> directly, bypassing Django — so **any CV is downloadable by anyone who knows or guesses its URL**,
+> with no login. If you deployed under the old instructions, remove the `/media/` row from the Web
+> tab and Reload.
 
-This makes the `cv` download links (returned by the admin API and shown in the staff panel) work.
+Opening the endpoint URL directly in a browser returns **401 Unauthorized** — expected, since the
+address bar sends no `Authorization: Token` header. Use the panel's Download CV button, or:
+
+```bash
+curl -H "Authorization: Token YOUR_TOKEN" -OJ \
+     https://MAPDET.pythonanywhere.com/api/admin/applications/<id>/cv/
+```
 
 > **Note:** CVs are uploaded at the *end* of the journey, and only by applicants who pass the quiz
 > (see [section 13](#13-the-pass-mark-gate-and-applicant-status)). An applicant who scored below the
@@ -348,8 +357,8 @@ The frontend and API share one origin, so the pages call `/api/...` directly wit
 
 **Smoke-test the whole journey** before announcing the URL: open the portal, fill in the details form,
 click Next, answer the quiz, and confirm that a score of 7+ unlocks the final CV/motivation step and
-that the CV downloads from the staff panel afterwards. That exercises MySQL writes, the `/media/`
-mapping and the pass-mark gate in one pass.
+that the CV downloads from the staff panel afterwards. That exercises MySQL writes, the CV download
+endpoint and the pass-mark gate in one pass.
 
 ---
 
@@ -386,6 +395,12 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 > **`db.sqlite3` is git-ignored, so question and applicant data never travel with a `git pull`.**
 > After a release that changes the question list, `seed_questions` must be re-run on the server or the
 > live quiz keeps serving the old set.
+
+> **Upgrading to the authenticated CV download:** the panel JS changed, so
+> **`collectstatic` is required** — without it WhiteNoise keeps serving the old `panel.js`/`api.js`
+> and the Download CV button still points at the dead `/media/` URL. No migration is needed. Also
+> remove the `/media/` static-files mapping if you added it under the old instructions
+> ([section 7](#7-set-up-static-and-media-files)); existing CVs stay where they are and keep working.
 
 > **Upgrading to the two-stage intake:** this release ships migration
 > `0004_application_final_submitted_at_alter_application_cv`, so `migrate` is **required**, and the
@@ -424,7 +439,9 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | `DisallowedHost` / HTTP 400 | Domain not in `ALLOWED_HOSTS` | Correct `DJANGO_ALLOWED_HOSTS` in the WSGI file, then Reload. Stray spaces around the value are stripped automatically |
 | Admin login fails with a **CSRF** error | Trusted origin not set | Set `DJANGO_CSRF_TRUSTED_ORIGINS=https://MAPDET.pythonanywhere.com` (your host), then Reload |
 | Pages load but have **no styling** | `collectstatic` not run | Run `python manage.py collectstatic --noinput`, then Reload |
-| Uploaded CV links return **404** | `/media/` mapping missing | Add the `/media/` static-files mapping (step 7) |
+| Download CV returns **404** in the panel | The row references a file that is no longer in `media/` (e.g. restored database without restoring `media/`) | Check `ls media/cvs/`; restore the media backup (section 12) |
+| Download CV returns **401** in the panel | Staff token expired | Log out and back in. A **401 when opening the endpoint URL in a browser is expected**, not a fault — see step 7 |
+| Download CV button does nothing / still hits `/media/` | The browser is running the old `panel.js` | Run `collectstatic --noinput`, Reload, then hard-refresh the panel |
 | An applicant has **no CV / empty motivation** | Status is **Fail**, so the final step never unlocked | Expected — check their status/score on the detail page |
 | Final step returns **403** | Quiz unfinished, or score below the pass mark | Expected — the gate is server-side (section 13) |
 | Portal **skips the details form** and 404s on quiz start | Stale `application_id` in the browser's `localStorage` (e.g. the applicant was deleted) | Fixed in the current release — the portal validates via `/api/applications/{id}/status/`. Make sure `collectstatic` ran and the browser reloaded the new `applicant.js` |
