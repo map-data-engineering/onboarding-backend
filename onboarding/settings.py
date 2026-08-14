@@ -29,14 +29,23 @@ def _csv_env(name, default):
     return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
 
 
-ALLOWED_HOSTS = _csv_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
+# The production host is a default rather than env-only so that a WSGI file
+# missing DJANGO_ALLOWED_HOSTS doesn't take the site down with DisallowedHost.
+# Host matching is case-insensitive, so "MAPDET.pythonanywhere.com" needs no
+# separate entry.
+ALLOWED_HOSTS = _csv_env(
+    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,mapdet.pythonanywhere.com"
+)
 
 # Required by Django for session-based POSTs (e.g. the admin login) over HTTPS.
 CSRF_TRUSTED_ORIGINS = [
     # Internal spaces ("https:// host") are just as fatal as padding, and Django's
     # own check only validates the scheme -- so squash whitespace entirely.
     "".join(origin.split())
-    for origin in _csv_env("DJANGO_CSRF_TRUSTED_ORIGINS", "")
+    for origin in _csv_env(
+        "DJANGO_CSRF_TRUSTED_ORIGINS",
+        "https://mapdet.pythonanywhere.com,http://localhost:8000,http://127.0.0.1:8000",
+    )
 ]
 
 
@@ -165,9 +174,12 @@ STORAGES = {
 # and only send cookies over HTTPS.
 if not DEBUG:
     # Let WhiteNoise compress and cache-bust static files in production.
-    STORAGES["staticfiles"]["BACKEND"] = (
-        "whitenoise.storage.CompressedManifestStaticFilesStorage"
-    )
+    # Compressed, but deliberately NOT the Manifest variant: manifest storage
+    # aborts collectstatic if any CSS references a file that isn't there, and it
+    # was already switched off on the server. Filenames are therefore unhashed,
+    # so a browser may hold a stale panel.js for up to WhiteNoise's max-age --
+    # hard-refresh the panel after deploying frontend changes.
+    STORAGES["staticfiles"]["BACKEND"] = "whitenoise.storage.CompressedStaticFilesStorage"
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True
@@ -189,12 +201,25 @@ REST_FRAMEWORK = {
     "PAGE_SIZE": 25,
 }
 
+# Every entry needs its scheme, and every line needs its trailing comma: two
+# adjacent string literals with no comma between them are silently concatenated
+# by Python into one nonsense origin, which drops the second one from the list.
 CORS_ALLOWED_ORIGINS = [
+    "https://geomap-onboarding-portal.vercel.app",
+    "https://geomap-onboardnig-portal-frontend.vercel.app",
     "https://spaat-onboardnig-portal-frontend.vercel.app",
     "http://localhost:5173",
     "http://127.0.0.1:5500",
 ]
 CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://geomap-onboarding-portal-.*\.vercel\.app$",
+    r"^https://geomap-onboardnig-portal-frontend-.*\.vercel\.app$",
     r"^https://spaat-onboardnig-portal-frontend-.*\.vercel\.app$",
 ]
 CORS_ALLOW_CREDENTIALS = False
+
+# The CV download sends its filename in Content-Disposition. Browsers hide
+# non-safelisted response headers from cross-origin JS unless they are exposed,
+# so without this a panel served from another origin (the Vercel frontend above)
+# saves every CV as "cv" with no extension. Same-origin panels are unaffected.
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]
