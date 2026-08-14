@@ -100,10 +100,14 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
         return PASS_MARK
 
     def get_cv(self, application):
+        """
+        Staff-only download endpoint, not the raw MEDIA_URL path: media is only
+        served by Django when DEBUG is on, and those URLs need no auth.
+        """
         if not application.cv:
             return None
+        url = f"/api/admin/applications/{application.pk}/cv/"
         request = self.context.get("request")
-        url = application.cv.url
         return request.build_absolute_uri(url) if request else url
 
     def get_quiz_status(self, application):

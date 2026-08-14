@@ -10,12 +10,36 @@ filesystem (so uploaded CVs survive restarts), and runs Django natively through 
 > by a single environment variable (`DJANGO_DB_ENGINE=mysql`) — see [section 4](#4-create-the-mysql-database)
 > — so no code changes are needed between the two. **MySQL on the free tier** is included.
 
-**Before you start**, note two conventions used throughout this document:
-
-- Replace **`USER`** with your own PythonAnywhere username wherever it appears.
-- The repository is `https://github.com/samzypaul/onboarding-.git`.
-
 Estimated time: ~15 minutes.
+
+---
+
+## 0. Your values (read this first)
+
+Every console block below starts from **two shell variables**, so your username appears in exactly
+one place instead of a dozen. Set them at the top of every new Bash console:
+
+```bash
+export PA_USER=MAPDET            # <-- your PythonAnywhere username
+export PA_PROJECT=onboarding-backend    # <-- the folder the repo clones into
+```
+
+After that, `$PA_USER` and `$PA_PROJECT` expand for you and nothing needs hand-editing.
+
+> **In Web-tab form fields** (source code path, virtualenv, WSGI file) there is no shell to expand
+> variables, so those are written out in full using `MAPDET` / `onboarding-backend` as the example.
+> **Swap in your own username there.** Leaving a placeholder in the database name is the single most
+> common way this deployment fails — it produces
+> `(1044, "Access denied for user 'you'@'%' to database 'USER$onboarding'")`, because MySQL then
+> looks for a database owned by a user literally called `USER`.
+
+| Thing | Value |
+|-------|-------|
+| Repository | `https://github.com/map-data-engineering/onboarding-backend.git` |
+| Project folder | `/home/$PA_USER/onboarding-backend` |
+| Virtualenv | `/home/$PA_USER/.virtualenvs/onboarding-venv` |
+| Site | `https://$PA_USER.pythonanywhere.com` |
+| Database | `$PA_USER$onboarding-backend` (the `$` between the two parts is part of the name) |
 
 ---
 
@@ -28,7 +52,7 @@ Estimated time: ~15 minutes.
 - Nothing to install for MySQL itself: PythonAnywhere hosts the server, and the `mysqlclient` driver
   comes in via `requirements-prod.txt` (step 2).
 
-> **Free-tier notes:** you get one web app at `USER.pythonanywhere.com`; you must log in at least
+> **Free-tier notes:** you get one web app at `<username>.pythonanywhere.com`; you must log in at least
 > once every 3 months or the app is disabled; and outbound internet access is limited to an
 > allow-list. This app makes no outbound calls, so the allow-list does not affect it.
 
@@ -39,8 +63,11 @@ Estimated time: ~15 minutes.
 Open a **Bash console** (Dashboard → *Consoles* → *Bash*) and run:
 
 ```bash
-git clone https://github.com/samzypaul/onboarding-.git
-cd onboarding-
+export PA_USER=MAPDET                    # your username
+export PA_PROJECT=onboarding-backend
+
+git clone https://github.com/map-data-engineering/onboarding-backend.git
+cd "$PA_PROJECT"
 
 # Create a virtualenv using the Python version your account offers (e.g. 3.13)
 mkvirtualenv --python=/usr/bin/python3.13 onboarding-venv
@@ -58,7 +85,7 @@ pip install -r requirements-prod.txt
 > are missing from the image — PythonAnywhere ships them, so this normally just works. Failing that,
 > `pip install mysqlclient --only-binary=:all:` forces a wheel.
 
-The virtualenv is created at `/home/USER/.virtualenvs/onboarding-venv`. Keep this console open —
+The virtualenv is created at `/home/$PA_USER/.virtualenvs/onboarding-venv`. Keep this console open —
 you will use it again in step 8.
 
 ---
@@ -82,18 +109,30 @@ Go to the **Databases** tab:
 1. If this is your first database, set a **MySQL password** (this is separate from your
    PythonAnywhere login password) and wait for the server to initialise.
 2. Under *Create a database*, enter `onboarding`. PythonAnywhere prefixes it with your username, so
-   the real database name becomes **`USER$onboarding`** — the `$` is part of the name.
+   the real name becomes **`MAPDET$onboarding`** — the `$` is part of the name.
 
-Note the four values you will need in the next step:
+> **Stick to letters, numbers and underscores.** The database name does *not* have to match the
+> project folder, and a hyphen (`onboarding-backend`) is a needless risk — it may be rejected or
+> altered on creation, leaving you connecting to a name that was never made.
 
-| Setting | Value |
-|---------|-------|
-| `DJANGO_DB_NAME` | `USER$onboarding` |
-| `DJANGO_DB_USER` | `USER` (your PythonAnywhere username) |
+**Copy the resulting name from the Databases tab** rather than assembling it by hand; the page lists
+it verbatim. Same for the host. These are the four values the next step needs:
+
+| Setting | Example value |
+|---------|---------------|
+| `DJANGO_DB_NAME` | `MAPDET$onboarding` |
+| `DJANGO_DB_USER` | `MAPDET` (your PythonAnywhere username) |
 | `DJANGO_DB_PASSWORD` | the MySQL password you just set |
-| `DJANGO_DB_HOST` | `USER.mysql.pythonanywhere-services.com` |
+| `DJANGO_DB_HOST` | `MAPDET.mysql.pythonanywhere-services.com` |
 
-The host is shown at the top of the **Databases** tab — copy it from there rather than typing it.
+**Verify it exists before going further** — this is faster than reading a Django traceback later:
+
+```bash
+mysql -u MAPDET -h MAPDET.mysql.pythonanywhere-services.com -p -e "SHOW DATABASES;"
+```
+
+Whatever that prints is the only name that will work. If the list shows just `information_schema`,
+the database was never created.
 
 > **No code change is needed to use MySQL.** `onboarding/settings.py` reads these variables and
 > switches engine when `DJANGO_DB_ENGINE=mysql`; without it, the project falls back to SQLite for
@@ -111,27 +150,35 @@ Go to the **Web** tab → **Add a new web app**:
    contains a full Django project).
 2. Select the **same Python version** as the virtualenv you created (e.g. 3.13).
 
-After the app is created, set these fields on the **Web** tab:
+After the app is created, set these fields on the **Web** tab (substituting your username — these are
+form fields, so `$PA_USER` will *not* expand here):
 
 | Field | Value |
 |-------|-------|
-| Source code | `/home/USER/onboarding-` |
-| Working directory | `/home/USER/onboarding-` |
-| Virtualenv | `/home/USER/.virtualenvs/onboarding-venv` |
+| Source code | `/home/MAPDET/onboarding-backend` |
+| Working directory | `/home/MAPDET/onboarding-backend` |
+| Virtualenv | `/home/MAPDET/.virtualenvs/onboarding-venv` |
 
 ---
 
 ## 6. Configure the WSGI file
 
 On the **Web** tab, click the **WSGI configuration file** link (it opens
-`/var/www/USER_pythonanywhere_com_wsgi.py`). Delete the entire contents and replace them with:
+`/var/www/MAPDET_pythonanywhere_com_wsgi.py`). Delete the entire contents and replace them with the
+block below.
+
+This file is plain Python, so it derives every path and hostname from **one** `PA_USER` line —
+change that and nothing else:
 
 ```python
 import os
 import sys
 
+PA_USER = "MAPDET"                      # <-- your PythonAnywhere username: the only line to edit
+PA_PROJECT = "onboarding-backend"       # <-- the folder the repo was cloned into
+
 # Make the project importable
-path = "/home/USER/onboarding-"
+path = f"/home/{PA_USER}/{PA_PROJECT}"
 if path not in sys.path:
     sys.path.insert(0, path)
 
@@ -139,23 +186,31 @@ if path not in sys.path:
 os.environ["DJANGO_SETTINGS_MODULE"] = "onboarding.settings"
 os.environ["DJANGO_DEBUG"] = "0"
 os.environ["DJANGO_SECRET_KEY"] = "PASTE_THE_GENERATED_SECRET_KEY_HERE"
-os.environ["DJANGO_ALLOWED_HOSTS"] = "USER.pythonanywhere.com"
-os.environ["DJANGO_CSRF_TRUSTED_ORIGINS"] = "https://USER.pythonanywhere.com"
+os.environ["DJANGO_ALLOWED_HOSTS"] = f"{PA_USER}.pythonanywhere.com"
+os.environ["DJANGO_CSRF_TRUSTED_ORIGINS"] = f"https://{PA_USER}.pythonanywhere.com"
 
 # MySQL (step 4). Without DJANGO_DB_ENGINE the project falls back to SQLite.
 os.environ["DJANGO_DB_ENGINE"] = "mysql"
-os.environ["DJANGO_DB_NAME"] = "USER$onboarding"
-os.environ["DJANGO_DB_USER"] = "USER"
+os.environ["DJANGO_DB_NAME"] = f"{PA_USER}${PA_PROJECT}"
+os.environ["DJANGO_DB_USER"] = PA_USER
 os.environ["DJANGO_DB_PASSWORD"] = "PASTE_YOUR_MYSQL_PASSWORD_HERE"
-os.environ["DJANGO_DB_HOST"] = "USER.mysql.pythonanywhere-services.com"
+os.environ["DJANGO_DB_HOST"] = f"{PA_USER}.mysql.pythonanywhere-services.com"
 
 # Start Django
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
 ```
 
-Replace `USER` everywhere, paste the secret key from step 3 and the MySQL password from step 4, then
+Set `PA_USER`/`PA_PROJECT`, paste the secret key from step 3 and the MySQL password from step 4, then
 **Save**.
+
+> Check `DJANGO_DB_NAME` against the **Databases** tab after saving. The `f"{PA_USER}${PA_PROJECT}"`
+> form assumes you named the database after the project folder; if you called it something else, spell
+> it out literally instead.
+
+> **These values must match your console exports (step 8) exactly.** If the two disagree, the site and
+> your management commands talk to *different databases* — the classic symptom is a working site with
+> no questions and no applicants.
 
 **What each variable does:**
 
@@ -193,7 +248,7 @@ on the **Web** tab → **Static files** section:
 
 | URL | Directory |
 |-----|-----------|
-| `/media/` | `/home/USER/onboarding-/media` |
+| `/media/` | `/home/MAPDET/onboarding-backend/media` |
 
 This makes the `cv` download links (returned by the admin API and shown in the staff panel) work.
 
@@ -202,51 +257,79 @@ This makes the `cv` download links (returned by the admin API and shown in the s
 > pass mark has no CV at all — the panel shows no download link for them. That is expected, not a
 > broken mapping.
 
-> Optionally, you may also map `/static/` → `/home/USER/onboarding-/staticfiles` so PythonAnywhere
-> serves static files directly (slightly faster than WhiteNoise). It is not required.
+> Optionally, you may also map `/static/` → `/home/MAPDET/onboarding-backend/staticfiles` so
+> PythonAnywhere serves static files directly (slightly faster than WhiteNoise). It is not required.
 
 ---
 
 ## 8. Initialize the database and collect static files
 
-Return to the **Bash console** from step 2 (`cd ~/onboarding-`, virtualenv active). Export the same
-production variables so the management commands hit **MySQL**, not a local SQLite file, then run the
-setup:
+Return to the **Bash console** from step 2 (virtualenv active). The management commands read the same
+environment variables as the web app, so export them here too — otherwise `migrate` builds a local
+SQLite file and the web app keeps talking to an empty MySQL.
+
+**Step 8a — set the variables.** Only the first three lines need your input:
 
 ```bash
+export PA_USER=MAPDET                       # your PythonAnywhere username
+export PA_PROJECT=onboarding-backend        # the repo folder / database suffix
+export DJANGO_DB_PASSWORD='your-mysql-password'
+
+cd ~/"$PA_PROJECT"
+workon onboarding-venv
+
 export DJANGO_DEBUG=0
 export DJANGO_SECRET_KEY="the-same-key-you-generated"
-export DJANGO_ALLOWED_HOSTS="USER.pythonanywhere.com"
-export DJANGO_CSRF_TRUSTED_ORIGINS="https://USER.pythonanywhere.com"
+export DJANGO_ALLOWED_HOSTS="$PA_USER.pythonanywhere.com"
+export DJANGO_CSRF_TRUSTED_ORIGINS="https://$PA_USER.pythonanywhere.com"
 
 export DJANGO_DB_ENGINE=mysql
-export DJANGO_DB_NAME='USER$onboarding'     # single quotes: $ must not be expanded by bash
-export DJANGO_DB_USER=USER
-export DJANGO_DB_PASSWORD='your-mysql-password'
-export DJANGO_DB_HOST=USER.mysql.pythonanywhere-services.com
+export DJANGO_DB_NAME="$PA_USER\$$PA_PROJECT"   # \$ is a literal $, not a variable
+export DJANGO_DB_USER="$PA_USER"
+export DJANGO_DB_HOST="$PA_USER.mysql.pythonanywhere-services.com"
+```
 
+**Step 8b — check before you run.** This catches the two mistakes that account for most failed
+deployments; both print `OK` when correct:
+
+```bash
+case "$DJANGO_DB_NAME" in
+  "")     echo "BAD: DJANGO_DB_NAME is empty" ;;
+  *USER*) echo "BAD: placeholder 'USER' left in [$DJANGO_DB_NAME]" ;;
+  *'$'*)  echo "OK: database is [$DJANGO_DB_NAME]" ;;
+  *)      echo "BAD: no '\$' in [$DJANGO_DB_NAME] - bash expanded it away" ;;
+esac
+python manage.py shell -c "from django.db import connection as c; c.ensure_connection(); print('OK:', c.vendor, c.settings_dict['NAME'])"
+```
+
+The second command opens a real connection, so it fails *here* — with a one-line error instead of a
+page of traceback — if the name, password or host is wrong. Fix it before continuing.
+
+**Step 8c — run the setup:**
+
+```bash
 python manage.py migrate                    # create the tables in MySQL
 python manage.py collectstatic --noinput    # gather static files for WhiteNoise
 python manage.py seed_questions             # load the 12 quiz questions
 python manage.py createsuperuser            # create your staff / admin login
 ```
 
-> **Quote `USER$onboarding` with single quotes.** In double quotes bash expands `$onboarding` to an
-> empty string, and `migrate` then fails with `Unknown database 'USER'`.
-
-Confirm you are really on MySQL before going further:
-
-```bash
-python manage.py shell -c "from django.db import connection; print(connection.vendor, connection.settings_dict['NAME'])"
-# -> mysql USER$onboarding
-```
-
 `createsuperuser` prompts for a username, email, and password — this account can sign in to both the
 staff panel (`/panel/`) and the Django admin (`/admin/`).
 
-**Forget the exports and you will silently create a `db.sqlite3` file instead** — the app will look
-empty when it starts, because the web app (which *does* have the variables) is reading MySQL. If that
-happens, `rm db.sqlite3`, re-export, and re-run the commands.
+**If step 8b reported a problem, read this before retrying:**
+
+- **`(1044, "Access denied … to database 'USER$…'")`** — a placeholder survived. The name must start
+  with *your* username. This is the most common failure; `collectstatic` still succeeds (it never
+  touches the database), which can make the run look half-successful.
+- **`Unknown database 'MAPDET'`** — the `$` was expanded by bash. Use `\$` inside double quotes, or
+  single-quote the whole literal value: `export DJANGO_DB_NAME='MAPDET$onboarding-backend'`.
+- **Padded values** — `" MAPDET.pythonanywhere.com "` is a real hazard when pasting. `settings.py`
+  trims surrounding whitespace from `DJANGO_ALLOWED_HOSTS` and strips it out of
+  `DJANGO_CSRF_TRUSTED_ORIGINS` (a space after `https://` breaks the origin), so these no longer
+  cause `DisallowedHost` — but keep them clean anyway.
+- **Forgot the exports entirely?** You will have created a stray `db.sqlite3`. `rm db.sqlite3`,
+  export, and re-run — otherwise the site looks empty because the web app reads MySQL.
 
 ---
 
@@ -256,12 +339,17 @@ On the **Web** tab, click the green **Reload** button, then open:
 
 | URL | Page |
 |-----|------|
-| `https://USER.pythonanywhere.com/` | Applicant portal |
-| `https://USER.pythonanywhere.com/panel/` | Staff panel (log in with the superuser) |
-| `https://USER.pythonanywhere.com/admin/` | Django admin |
-| `https://USER.pythonanywhere.com/api/` | REST API root |
+| `https://MAPDET.pythonanywhere.com/` | Applicant portal |
+| `https://MAPDET.pythonanywhere.com/panel/` | Staff panel (log in with the superuser) |
+| `https://MAPDET.pythonanywhere.com/admin/` | Django admin |
+| `https://MAPDET.pythonanywhere.com/api/` | REST API root |
 
 The frontend and API share one origin, so the pages call `/api/...` directly with no CORS setup.
+
+**Smoke-test the whole journey** before announcing the URL: open the portal, fill in the details form,
+click Next, answer the quiz, and confirm that a score of 7+ unlocks the final CV/motivation step and
+that the CV downloads from the staff panel afterwards. That exercises MySQL writes, the `/media/`
+mapping and the pass-mark gate in one pass.
 
 ---
 
@@ -272,20 +360,32 @@ the `DJANGO_DB_*` variables first** (a fresh console doesn't have them) or `migr
 target SQLite:
 
 ```bash
-cd ~/onboarding-
+export PA_USER=MAPDET PA_PROJECT=onboarding-backend
+cd ~/"$PA_PROJECT"
 workon onboarding-venv
 git pull
-export DJANGO_DB_ENGINE=mysql DJANGO_DB_NAME='USER$onboarding' DJANGO_DB_USER=USER \
-       DJANGO_DB_PASSWORD='your-mysql-password' \
-       DJANGO_DB_HOST=USER.mysql.pythonanywhere-services.com
+
+export DJANGO_DB_ENGINE=mysql
+export DJANGO_DB_NAME="$PA_USER\$$PA_PROJECT"
+export DJANGO_DB_USER="$PA_USER"
+export DJANGO_DB_PASSWORD='your-mysql-password'
+export DJANGO_DB_HOST="$PA_USER.mysql.pythonanywhere-services.com"
+
 pip install -r requirements-prod.txt      # only if dependencies changed
 python manage.py migrate                  # only if there are new migrations
+python manage.py seed_questions           # only if the question list changed
 python manage.py collectstatic --noinput  # only if static files or templates changed
 ```
 
 Then click **Reload** on the **Web** tab. A reload is required for any change to take effect.
 
-> **Tip:** put those exports in `~/.bashrc` so every new console has them, then `source ~/.bashrc`.
+> **Tip:** put the `export` lines in `~/.bashrc` so every new console already has them
+> (`source ~/.bashrc` to apply immediately). Skipping them is what silently creates a stray
+> `db.sqlite3` — re-run the step-8b check if you are unsure.
+
+> **`db.sqlite3` is git-ignored, so question and applicant data never travel with a `git pull`.**
+> After a release that changes the question list, `seed_questions` must be re-run on the server or the
+> live quiz keeps serving the old set.
 
 > **Upgrading to the two-stage intake:** this release ships migration
 > `0004_application_final_submitted_at_alter_application_cv`, so `migrate` is **required**, and the
@@ -307,7 +407,9 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
 | `ImproperlyConfigured: Error loading MySQLdb module` | `mysqlclient` not installed in the virtualenv | `workon onboarding-venv && pip install -r requirements-prod.txt` |
+| `(1044, "Access denied … to database 'USER$onboarding'")` | The literal placeholder `USER` was left in the database name | Substitute your own username: `export DJANGO_DB_NAME='yourusername$onboarding'` |
 | `(1049, "Unknown database 'USER'")` | `USER$onboarding` was written in double quotes, so bash ate the `$` | Re-export with **single** quotes |
+| `(1044, …)` with the **right** username | The database doesn't exist, or the name differs from what you typed (a hyphen may have been rejected on creation). Note that 1044 means authentication *succeeded* — only the database is wrong | List what actually exists: `mysql -u USER -h USER.mysql.pythonanywhere-services.com -p -e "SHOW DATABASES;"` and use that name verbatim |
 | `(1045, "Access denied for user …")` | Wrong MySQL password (it is *not* your PythonAnywhere login) | Reset it on the **Databases** tab, update the WSGI file and your exports |
 | `(2005, "Unknown server host …")` | Typo in `DJANGO_DB_HOST` | Copy the host string from the **Databases** tab |
 | `(2006, "MySQL server has gone away")` | Connection idled past MySQL's ~300s timeout | Ensure `DJANGO_DB_CONN_MAX_AGE` is below 300 (default 60), or set it to `0` |
@@ -319,8 +421,8 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 
 | Symptom | Likely cause | Fix |
 |---------|--------------|-----|
-| `DisallowedHost` / HTTP 400 | Domain not in `ALLOWED_HOSTS` | Correct `DJANGO_ALLOWED_HOSTS` in the WSGI file, then Reload |
-| Admin login fails with a **CSRF** error | Trusted origin not set | Set `DJANGO_CSRF_TRUSTED_ORIGINS=https://USER.pythonanywhere.com`, then Reload |
+| `DisallowedHost` / HTTP 400 | Domain not in `ALLOWED_HOSTS` | Correct `DJANGO_ALLOWED_HOSTS` in the WSGI file, then Reload. Stray spaces around the value are stripped automatically |
+| Admin login fails with a **CSRF** error | Trusted origin not set | Set `DJANGO_CSRF_TRUSTED_ORIGINS=https://MAPDET.pythonanywhere.com` (your host), then Reload |
 | Pages load but have **no styling** | `collectstatic` not run | Run `python manage.py collectstatic --noinput`, then Reload |
 | Uploaded CV links return **404** | `/media/` mapping missing | Add the `/media/` static-files mapping (step 7) |
 | An applicant has **no CV / empty motivation** | Status is **Fail**, so the final step never unlocked | Expected — check their status/score on the detail page |
@@ -337,12 +439,13 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 - **Backups:** applicant data lives in **MySQL**, uploaded CVs in the `media/` folder on disk. Back
   up both:
   ```bash
-  mysqldump -u USER -h USER.mysql.pythonanywhere-services.com -p 'USER$onboarding' > backup.sql
-  tar czf media-backup.tar.gz media/
+  mysqldump -u "$PA_USER" -h "$PA_USER.mysql.pythonanywhere-services.com" \
+            -p "$PA_USER\$$PA_PROJECT" > backup-$(date +%F).sql
+  tar czf media-backup-$(date +%F).tar.gz media/
   ```
   `mysqldump` prompts for the MySQL password. Download the files from the **Files** tab. Neither is
   in Git by design — do not commit them.
-- **Restoring:** `mysql -u USER -h … -p 'USER$onboarding' < backup.sql`.
+- **Restoring:** `mysql -u "$PA_USER" -h … -p "$PA_USER\$$PA_PROJECT" < backup.sql`.
 - **Browsing the data:** `python manage.py dbshell` opens a MySQL prompt with the app's credentials,
   or use the **Databases** tab → *MySQL console*.
 - **Rotating the secret key:** generate a new key (step 3), update `DJANGO_SECRET_KEY` in the WSGI
@@ -442,3 +545,30 @@ force HTTPS and enable HSTS, add the following inside the `if not DEBUG:` block 
 
 Enable HSTS only once you are certain the site will always be served over HTTPS — the browser will
 refuse plain HTTP for the duration of `SECURE_HSTS_SECONDS`.
+
+---
+
+## Appendix C — A separate frontend (CORS)
+
+The portal and staff panel are served by Django itself, same-origin, so **the deployment above needs
+no CORS configuration**. If you also run a standalone frontend on another domain (a Vite/Vercel app,
+say), it must be listed in `onboarding/settings.py`:
+
+```python
+CORS_ALLOWED_ORIGINS = [
+    "https://your-frontend.vercel.app",
+    "http://localhost:5173",
+]
+CORS_ALLOWED_ORIGIN_REGEXES = [
+    r"^https://your-frontend-.*\.vercel\.app$",   # Vercel preview deployments
+]
+```
+
+These are hard-coded rather than environment-driven, so adding a domain means editing the file,
+committing, `git pull` on the server and **Reload**. `CORS_ALLOW_CREDENTIALS` is `False`: the
+applicant API needs no cookies, and the staff API authenticates with an `Authorization: Token …`
+header, which is unaffected.
+
+> A browser calling the API from an unlisted origin fails with a CORS error in the console while
+> `curl` and Thunder Client succeed — those ignore CORS entirely. If the API works in a REST client
+> but not in the browser, this list is the first thing to check.

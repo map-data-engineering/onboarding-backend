@@ -8,7 +8,11 @@ Auth is token-based:
 All endpoints except login require an authenticated staff user (is_staff=True).
 """
 
+import os
+import re
+
 from django.contrib.auth import authenticate
+from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
 from rest_framework import status
@@ -166,6 +170,35 @@ def admin_application_detail(request, application_id):
 
     serializer = ApplicationDetailSerializer(application, context={"request": request})
     return Response(serializer.data)
+
+
+@api_view(["GET"])
+@permission_classes([IsAdminUser])
+def admin_application_cv(request, application_id):
+    """
+    Stream an applicant's CV back to the staff panel as a download.
+
+    Uploaded files live under MEDIA_ROOT, which Django only serves itself when
+    DEBUG is on — in production the old /media/... link 404s. Serving the file
+    through the API keeps it working in both, and keeps CVs staff-only instead
+    of readable by anyone who guesses the media URL.
+    """
+    application = get_object_or_404(Application, pk=application_id)
+    if not application.cv:
+        raise Http404("This applicant has not uploaded a CV.")
+
+    try:
+        handle = application.cv.open("rb")
+    except FileNotFoundError:
+        # Row still references a file that is no longer on disk.
+        raise Http404("The CV file is missing from storage.") from None
+
+    # Download as "Firstname-Lastname-CV.pdf" rather than the stored hash-ish name.
+    extension = os.path.splitext(application.cv.name)[1] or ""
+    stem = f"{application.first_name}-{application.last_name}-CV".strip("-")
+    filename = re.sub(r"[^A-Za-z0-9._-]+", "-", stem) + extension
+
+    return FileResponse(handle, as_attachment=True, filename=filename)
 
 
 @api_view(["POST"])

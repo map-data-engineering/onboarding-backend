@@ -277,9 +277,10 @@ function renderDetail(a) {
     ? `${badge} <span class="text-muted small">${a.score}/${a.total}, pass mark ${a.pass_mark}</span>`
     : badge;
 
+  // The CV endpoint is token-protected, so the button downloads via fetch
+  // rather than navigating -- see downloadCv().
   const cv = document.getElementById("d-cv");
-  if (a.cv) { cv.href = a.cv; cv.classList.remove("d-none"); }
-  else { cv.classList.add("d-none"); }
+  cv.classList.toggle("d-none", !a.cv);
 
   const dl = document.getElementById("d-fields");
   dl.innerHTML = "";
@@ -365,6 +366,20 @@ async function setDecision(action) {
     }
   }
 }
+
+// Detail CV download
+document.getElementById("d-cv").addEventListener("click", async () => {
+  if (!currentDetailId) return;
+  const detailAlert = document.getElementById("detail-alert");
+  detailAlert.classList.add("d-none");
+  try {
+    await apiDownload(`/admin/applications/${currentDetailId}/cv/`, TOKEN.get(), "cv");
+  } catch (err) {
+    if (err.status === 401) { TOKEN.set(null); showView("login"); return; }
+    detailAlert.textContent = (err.data && err.data.detail) || "Could not download the CV.";
+    detailAlert.classList.remove("d-none");
+  }
+});
 
 // Detail delete
 document.getElementById("d-delete").addEventListener("click", async () => {

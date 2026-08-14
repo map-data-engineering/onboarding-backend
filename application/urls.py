@@ -24,4 +24,5 @@ urlpatterns = [
     path("admin/applications/bulk/", admin_views.admin_applications_bulk),
     path("admin/applications/<uuid:application_id>/", admin_views.admin_application_detail),
     path("admin/applications/<uuid:application_id>/quiz/", admin_views.admin_application_quiz),
+    path("admin/applications/<uuid:application_id>/cv/", admin_views.admin_application_cv),
 ]

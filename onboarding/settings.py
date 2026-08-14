@@ -17,17 +17,26 @@ SECRET_KEY = os.environ.get(
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = os.environ.get("DJANGO_DEBUG", "1") == "1"
 
-ALLOWED_HOSTS = os.environ.get(
-    "DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1,Vedas.pythonanywhere.com"
-).split(",")
+
+def _csv_env(name, default):
+    """Split a comma-separated env var, trimming blanks and stray whitespace.
+
+    Hosts and origins are typed by hand into a WSGI file or an `export` line, and
+    a value like `" host.example.com "` would otherwise be kept verbatim -- Django
+    compares Host headers exactly, so the padded entry never matches and every
+    request 400s with DisallowedHost.
+    """
+    return [item.strip() for item in os.environ.get(name, default).split(",") if item.strip()]
+
+
+ALLOWED_HOSTS = _csv_env("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1")
 
 # Required by Django for session-based POSTs (e.g. the admin login) over HTTPS.
 CSRF_TRUSTED_ORIGINS = [
-    o
-    for o in os.environ.get(
-        "DJANGO_CSRF_TRUSTED_ORIGINS", "https://Vedas.pythonanywhere.com"
-    ).split(",")
-    if o
+    # Internal spaces ("https:// host") are just as fatal as padding, and Django's
+    # own check only validates the scheme -- so squash whitespace entirely.
+    "".join(origin.split())
+    for origin in _csv_env("DJANGO_CSRF_TRUSTED_ORIGINS", "")
 ]
 
 
