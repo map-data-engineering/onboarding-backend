@@ -45,30 +45,6 @@ async function apiJson(method, path, body, token) {
   return data;
 }
 
-// File download. The endpoint is token-protected, so a plain <a href> can't
-// reach it -- fetch with the header, then hand the blob to a throwaway link.
-// Filename comes from Content-Disposition, falling back to `fallbackName`.
-async function apiDownload(path, token, fallbackName) {
-  const headers = {};
-  if (token) headers["Authorization"] = `Token ${token}`;
-
-  const res = await fetch(`${API}${path}`, { headers });
-  if (!res.ok) throw new ApiError(res.status, await parseBody(res));
-
-  const disposition = res.headers.get("content-disposition") || "";
-  const match = /filename="?([^";]+)"?/.exec(disposition);
-  const name = match ? match[1] : fallbackName;
-
-  const url = URL.createObjectURL(await res.blob());
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = name;
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
 // Multipart request (used only for the application form + CV upload).
 // NOTE: never set Content-Type yourself -- the browser adds the multipart boundary.
 async function apiForm(method, path, formData) {

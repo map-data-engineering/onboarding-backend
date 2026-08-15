@@ -2,6 +2,7 @@
 
 from rest_framework import serializers
 
+from .cv_links import sign_cv_link
 from .models import PASS_MARK, Application, SessionQuestion
 
 
@@ -103,10 +104,15 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
         """
         Staff-only download endpoint, not the raw MEDIA_URL path: media is only
         served by Django when DEBUG is on, and those URLs need no auth.
+
+        The `sig` is what lets a frontend render this as a plain `<a href>` --
+        a link click sends no Authorization header. Only staff can reach this
+        serializer, so minting it here keeps the gate intact, and it expires
+        after CV_LINK_MAX_AGE.
         """
         if not application.cv:
             return None
-        url = f"/api/admin/applications/{application.pk}/cv/"
+        url = f"/api/admin/applications/{application.pk}/cv/?sig={sign_cv_link(application.pk)}"
         request = self.context.get("request")
         return request.build_absolute_uri(url) if request else url
 

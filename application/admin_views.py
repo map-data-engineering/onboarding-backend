@@ -18,6 +18,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
+from rest_framework.exceptions import NotAuthenticated, PermissionDenied
 from rest_framework.permissions import AllowAny, IsAdminUser
 from rest_framework.response import Response
 
@@ -26,6 +27,7 @@ from .admin_serializers import (
     ApplicationListSerializer,
     SessionQuestionBreakdownSerializer,
 )
+from .cv_links import unsign_cv_link
 from .models import PASS_MARK, Application
 
 
@@ -173,7 +175,7 @@ def admin_application_detail(request, application_id):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([AllowAny])  # authorised below: staff credentials OR a signed link
 def admin_application_cv(request, application_id):
     """
     Stream an applicant's CV back to the staff panel as a download.
@@ -182,8 +184,31 @@ def admin_application_cv(request, application_id):
     DEBUG is on — in production the old /media/... link 404s. Serving the file
     through the API keeps it working in both, and keeps CVs staff-only instead
     of readable by anyone who guesses the media URL.
+
+    Two ways in, because a browser following a plain link cannot send an
+    `Authorization` header (the standalone frontends render the CV as an
+    `<a href>`, and a link click carries no headers):
+
+      1. Staff credentials — a token or an admin session, as everywhere else.
+      2. `?sig=` — a short-lived signature minted by the detail endpoint, which
+         only staff can call. It expires after CV_LINK_MAX_AGE, so a leaked URL
+         stops working; contrast the old /media/ path, which never did.
     """
     application = get_object_or_404(Application, pk=application_id)
+
+    signature = request.query_params.get("sig")
+    if signature:
+        problem = unsign_cv_link(signature, application.pk)
+        if problem:
+            raise PermissionDenied(problem)
+    elif not request.user.is_authenticated:
+        # Match IsAdminUser exactly: 401 when nobody is logged in, 403 when
+        # someone is but isn't staff. A blanket 401 would tell a signed-in
+        # non-staff user to "authenticate", which they already have.
+        raise NotAuthenticated()
+    elif not request.user.is_staff:
+        raise PermissionDenied()
+
     if not application.cv:
         raise Http404("This applicant has not uploaded a CV.")
 

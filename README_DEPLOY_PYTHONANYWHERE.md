@@ -243,9 +243,17 @@ Static files (CSS/JS, including the app's own stylesheet and the Django admin as
 **WhiteNoise**, which is already configured in the project — no web-server mapping is required for
 them.
 
-Uploaded **media** (applicant CVs) needs **no mapping at all**. CVs are downloaded through the
-staff-only API endpoint `GET /api/admin/applications/{id}/cv/`, which streams the file from
-`MEDIA_ROOT` after checking the caller's staff token.
+Uploaded **media** (applicant CVs) needs **no mapping at all**. CVs are downloaded through
+`GET /api/admin/applications/{id}/cv/`, which streams the file from `MEDIA_ROOT` after authorising
+the caller.
+
+That endpoint accepts **either** staff credentials (a token or an admin session) **or** a `?sig=`
+signature. The signature exists because a browser following a plain `<a href>` sends no
+`Authorization` header — so a frontend can render the `cv` field straight into a link and it just
+works. Only staff can obtain one: it is minted by the applicant-detail endpoint, which is itself
+staff-only. It is bound to a single applicant and **expires after 15 minutes**
+(`CV_LINK_MAX_AGE` in `application/cv_links.py`), so a leaked URL goes dead — unlike the old
+`/media/` path, which stayed valid forever.
 
 > **Do not add a `/media/` static-files mapping.** Earlier versions of this guide did, because the
 > panel linked straight at `MEDIA_URL`. That mapping has PythonAnywhere's webserver serve the folder
@@ -253,8 +261,9 @@ staff-only API endpoint `GET /api/admin/applications/{id}/cv/`, which streams th
 > with no login. If you deployed under the old instructions, remove the `/media/` row from the Web
 > tab and Reload.
 
-Opening the endpoint URL directly in a browser returns **401 Unauthorized** — expected, since the
-address bar sends no `Authorization: Token` header. Use the panel's Download CV button, or:
+Pasting the URL **without** its `?sig=` into a browser returns **401 Unauthorized**. That is correct,
+not a fault — the address bar sends no credentials. Copy the whole link including the signature, or
+use a token:
 
 ```bash
 curl -H "Authorization: Token YOUR_TOKEN" -OJ \
@@ -396,11 +405,15 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 > After a release that changes the question list, `seed_questions` must be re-run on the server or the
 > live quiz keeps serving the old set.
 
-> **Upgrading to the authenticated CV download:** the panel JS changed, so
-> **`collectstatic` is required** — without it WhiteNoise keeps serving the old `panel.js`/`api.js`
-> and the Download CV button still points at the dead `/media/` URL. No migration is needed. Also
-> remove the `/media/` static-files mapping if you added it under the old instructions
+> **Upgrading to the signed CV download:** the panel JS changed, so **`collectstatic` is required** —
+> without it WhiteNoise keeps serving the old `panel.js`/`api.js` and the Download CV button still
+> points at the dead `/media/` URL. No migration is needed. Also remove the `/media/` static-files
+> mapping if you added it under the old instructions
 > ([section 7](#7-set-up-static-and-media-files)); existing CVs stay where they are and keep working.
+>
+> **Standalone frontends need no change.** They render the `cv` field as a link, and that field now
+> carries a signature, so the link works as it always did. Rotating `DJANGO_SECRET_KEY` invalidates
+> every outstanding signature — harmless, since a page reload mints new ones.
 
 > **Upgrading to the two-stage intake:** this release ships migration
 > `0004_application_final_submitted_at_alter_application_cv`, so `migrate` is **required**, and the
@@ -440,8 +453,9 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | Admin login fails with a **CSRF** error | Trusted origin not set | Set `DJANGO_CSRF_TRUSTED_ORIGINS=https://MAPDET.pythonanywhere.com` (your host), then Reload |
 | Pages load but have **no styling** | `collectstatic` not run | Run `python manage.py collectstatic --noinput`, then Reload |
 | Download CV returns **404** in the panel | The row references a file that is no longer in `media/` (e.g. restored database without restoring `media/`) | Check `ls media/cvs/`; restore the media backup (section 12) |
-| Download CV returns **401** in the panel | Staff token expired | Log out and back in. A **401 when opening the endpoint URL in a browser is expected**, not a fault — see step 7 |
-| Download CV button does nothing / still hits `/media/` | The browser is running the old `panel.js` | Run `collectstatic --noinput`, Reload, then hard-refresh the panel |
+| Download CV returns **401** | The link lost its `?sig=`, or the staff token expired | Reload the applicant page to mint a fresh link; log out and back in if the whole panel 401s |
+| Download CV returns **403** "link has expired" | The page sat open longer than `CV_LINK_MAX_AGE` (15 min) | Reload the applicant detail page — that mints a new signature |
+| Download CV does nothing when clicked | The browser is running an old `panel.js` | Run `collectstatic --noinput`, Reload, then hard-refresh with Ctrl+Shift+R |
 | An applicant has **no CV / empty motivation** | Status is **Fail**, so the final step never unlocked | Expected — check their status/score on the detail page |
 | Final step returns **403** | Quiz unfinished, or score below the pass mark | Expected — the gate is server-side (section 13) |
 | Portal **skips the details form** and 404s on quiz start | Stale `application_id` in the browser's `localStorage` (e.g. the applicant was deleted) | Fixed in the current release — the portal validates via `/api/applications/{id}/status/`. Make sure `collectstatic` ran and the browser reloaded the new `applicant.js` |
