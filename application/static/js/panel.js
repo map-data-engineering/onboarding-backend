@@ -54,9 +54,30 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
+// Capabilities of the signed-in staff account. Viewers get a read-only panel;
+// the server enforces the same rules, so this is purely about not showing
+// buttons that would come back 403.
+let CAN_REVIEW = true;
+
 function setNavUser(user) {
-  document.getElementById("nav-username").textContent =
-    user.username + (user.is_superuser ? " (superuser)" : "");
+  const role = user.is_superuser ? " (superuser)" : user.role === "viewer" ? " (view only)" : "";
+  document.getElementById("nav-username").textContent = user.username + role;
+  applyCapabilities(user);
+}
+
+function applyCapabilities(user) {
+  CAN_REVIEW = user.can_review !== false;
+  const hide = (el, condition) => el && el.classList.toggle("d-none", condition);
+
+  hide(document.getElementById("viewer-badge"), CAN_REVIEW);
+  hide(document.getElementById("export-csv"), user.can_export === false);
+  // Select-all lives in the header; the per-row checkboxes are handled in
+  // renderList(), which runs each time the table is redrawn.
+  hide(document.getElementById("select-all").closest("th"), !CAN_REVIEW);
+  // The decision *badge* stays visible for viewers -- it's information. Only the
+  // controls that would change or delete the record go away.
+  hide(document.querySelector("#view-detail .btn-group"), !CAN_REVIEW);
+  hide(document.getElementById("d-delete"), !CAN_REVIEW);
 }
 
 document.getElementById("logout-btn").addEventListener("click", async () => {
@@ -137,7 +158,9 @@ function renderList(rows) {
     const score = r.score != null ? `${r.score} / ${r.total}` : "—";
     const decision = DECISION_BADGE[r.decision] || esc(r.decision || "");
     tr.innerHTML = `
-      <td class="select-cell"><input type="checkbox" class="form-check-input row-check" value="${r.id}"></td>
+      <td class="select-cell${CAN_REVIEW ? "" : " d-none"}">${
+        CAN_REVIEW ? `<input type="checkbox" class="form-check-input row-check" value="${r.id}">` : ""
+      }</td>
       <td class="fw-semibold">${esc(r.first_name)} ${esc(r.last_name)}</td>
       <td>${esc(r.email)}</td>
       <td>${esc(r.institution || "")}</td>
@@ -154,12 +177,14 @@ function renderList(rows) {
       loadDetail(r.id);
     });
 
-    const cb = tr.querySelector(".row-check");
-    cb.addEventListener("change", () => {
-      cb.checked ? selected.add(r.id) : selected.delete(r.id);
-      syncSelectAll();
-      updateBulkBar();
-    });
+    const cb = tr.querySelector(".row-check");   // absent for view-only accounts
+    if (cb) {
+      cb.addEventListener("change", () => {
+        cb.checked ? selected.add(r.id) : selected.delete(r.id);
+        syncSelectAll();
+        updateBulkBar();
+      });
+    }
     applicantsBody.appendChild(tr);
   });
 }
@@ -220,6 +245,50 @@ statusFilter.addEventListener("change", (e) => {
   currentStatus = e.target.value;
   currentPage = 1;
   loadList();
+});
+
+// ---- CSV export ----
+// A plain <a href> can't carry the `Authorization: Token …` header, so fetch the
+// file and hand the browser a blob instead. The query string mirrors the list, so
+// the download contains exactly the rows currently filtered -- not every applicant.
+document.getElementById("export-csv").addEventListener("click", async (e) => {
+  const btn = e.currentTarget;
+  const original = btn.innerHTML;
+  btn.disabled = true;
+  btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Exporting…`;
+  listAlert.classList.add("d-none");
+
+  const params = new URLSearchParams();
+  if (currentSearch) params.set("search", currentSearch);
+  if (currentStatus) params.set("status", currentStatus);
+  const qs = params.toString() ? `?${params}` : "";
+
+  try {
+    const res = await fetch(`${API}/admin/applications/export/${qs}`, {
+      headers: { Authorization: `Token ${TOKEN.get()}` },
+    });
+    if (res.status === 401) { TOKEN.set(null); showView("login"); return; }
+    if (!res.ok) throw new Error(`Export failed (${res.status})`);
+
+    // Honour the filename the server chose (applicants-<timestamp>.csv).
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = match ? match[1] : "applicants.csv";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    listAlert.textContent = err.message || "Could not export applicants.";
+    listAlert.classList.remove("d-none");
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = original;
+  }
 });
 
 // Debounced search

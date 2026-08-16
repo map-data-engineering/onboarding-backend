@@ -21,6 +21,8 @@ urlpatterns = [
     path("admin/logout/", admin_views.admin_logout),
     path("admin/me/", admin_views.admin_me),
     path("admin/applications/", admin_views.admin_applications),
+    # CSV of whatever ?search=/?status= currently select (reviewers only)
+    path("admin/applications/export/", admin_views.admin_applications_export),
     path("admin/applications/bulk/", admin_views.admin_applications_bulk),
     path("admin/applications/<uuid:application_id>/", admin_views.admin_application_detail),
     path("admin/applications/<uuid:application_id>/quiz/", admin_views.admin_application_quiz),

@@ -45,8 +45,11 @@
   <!-- ============ APPLICANTS LIST ============ -->
   <section id="view-list" class="d-none">
     <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">Applicants</h4>
+      <h4 class="mb-0">Applicants <span class="badge bg-secondary align-middle d-none" id="viewer-badge">View only</span></h4>
       <div class="d-flex gap-2">
+        <button class="btn btn-outline-success" id="export-csv" title="Download the filtered list as CSV">
+          <i class="bi bi-filetype-csv"></i> Export CSV
+        </button>
         <select class="form-select" id="status-filter" style="max-width:180px" title="Knowledge-check outcome">
           <option value="">All statuses</option>
           <option value="pass">Pass</option>

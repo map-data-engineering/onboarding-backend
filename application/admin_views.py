@@ -19,7 +19,7 @@ from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
 from rest_framework.exceptions import NotAuthenticated, PermissionDenied
-from rest_framework.permissions import AllowAny, IsAdminUser
+from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from .admin_serializers import (
@@ -28,7 +28,9 @@ from .admin_serializers import (
     SessionQuestionBreakdownSerializer,
 )
 from .cv_links import unsign_cv_link
+from .exports import applications_csv_response
 from .models import PASS_MARK, Application
+from .permissions import CanReviewApplicants, IsStaff, can_review, is_viewer
 
 
 @api_view(["POST"])
@@ -53,20 +55,29 @@ def admin_login(request):
         )
 
     token, _ = Token.objects.get_or_create(user=user)
-    return Response(
-        {
-            "token": token.key,
-            "user": {
-                "username": user.username,
-                "email": user.email,
-                "is_superuser": user.is_superuser,
-            },
-        }
-    )
+    return Response({"token": token.key, "user": _user_payload(user)})
+
+
+def _user_payload(user):
+    """
+    Identity + capabilities.
+
+    The panel hides the decision, delete, bulk and export controls when
+    `can_review` is false. That is presentation only -- every one of those
+    endpoints enforces the same rule server-side.
+    """
+    return {
+        "username": user.username,
+        "email": user.email,
+        "is_superuser": user.is_superuser,
+        "role": "viewer" if is_viewer(user) else "reviewer",
+        "can_review": can_review(user),
+        "can_export": can_review(user),
+    }
 
 
 @api_view(["POST"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsStaff])
 def admin_logout(request):
     """Invalidate the caller's token."""
     Token.objects.filter(user=request.user).delete()
@@ -74,29 +85,26 @@ def admin_logout(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsStaff])
 def admin_me(request):
     """Return the authenticated staff user (handy for verifying a token)."""
-    user = request.user
-    return Response(
-        {
-            "username": user.username,
-            "email": user.email,
-            "is_superuser": user.is_superuser,
-        }
-    )
+    return Response(_user_payload(request.user))
 
 
-@api_view(["GET"])
-@permission_classes([IsAdminUser])
-def admin_applications(request):
+class InvalidFilter(Exception):
+    """Raised by _filtered_applications for a query param the caller got wrong."""
+
+    def __init__(self, payload):
+        self.payload = payload
+
+
+def _filtered_applications(request):
     """
-    Paginated list of applicants.
+    Applicants matching the request's ?search= and ?status= filters, newest first.
 
-    Query params:
-      ?search=  filter by first/last name, email, or institution (case-insensitive)
-      ?status=  pass | fail | pending  (the knowledge-check outcome)
-      ?page=    page number (page size is 25)
+    Shared by the list and the CSV export so the two can never disagree about
+    what "the current filters" mean -- an export that quietly returned everyone
+    would be worse than no export at all.
     """
     from django.db.models import Count, Q
 
@@ -128,10 +136,26 @@ def admin_applications(request):
                 else qs.filter(correct_count__lt=PASS_MARK)
             )
     elif status_filter:
-        return Response(
-            {"status": ["Must be one of ['pass', 'fail', 'pending']."]},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        raise InvalidFilter({"status": ["Must be one of ['pass', 'fail', 'pending']."]})
+
+    return qs
+
+
+@api_view(["GET"])
+@permission_classes([IsStaff])
+def admin_applications(request):
+    """
+    Paginated list of applicants. Open to viewers as well as reviewers.
+
+    Query params:
+      ?search=  filter by first/last name, email, or institution (case-insensitive)
+      ?status=  pass | fail | pending  (the knowledge-check outcome)
+      ?page=    page number (page size is 25)
+    """
+    try:
+        qs = _filtered_applications(request)
+    except InvalidFilter as bad:
+        return Response(bad.payload, status=status.HTTP_400_BAD_REQUEST)
 
     # Reuse the project's default PageNumberPagination.
     from rest_framework.pagination import PageNumberPagination
@@ -142,15 +166,40 @@ def admin_applications(request):
     return paginator.get_paginated_response(serializer.data)
 
 
+@api_view(["GET"])
+@permission_classes([CanReviewApplicants])
+def admin_applications_export(request):
+    """
+    Download the applicants matching the current filters as CSV.
+
+    Takes the same ?search= and ?status= params as the list, so the file contains
+    exactly the rows on screen -- not the whole table. Restricted to reviewers:
+    view-only accounts can read records individually but not bulk-export them.
+    """
+    try:
+        qs = _filtered_applications(request)
+    except InvalidFilter as bad:
+        return Response(bad.payload, status=status.HTTP_400_BAD_REQUEST)
+
+    return applications_csv_response(qs, request=request)
+
+
 @api_view(["GET", "PATCH", "DELETE"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsStaff])
 def admin_application_detail(request, application_id):
     """
-    GET    -> full applicant record + CV URL + quiz summary
+    GET    -> full applicant record + CV URL + quiz summary (viewers included)
     PATCH  -> update the review decision ({"decision": "SELECTED"|"REJECTED"|"PENDING"})
     DELETE -> delete the applicant (and their uploaded CV + quiz, via cascade)
+
+    Reading is open to any staff account; PATCH and DELETE are reviewers only.
     """
     application = get_object_or_404(Application, pk=application_id)
+
+    # One view, three methods -- so the write check lives here rather than in a
+    # permission class, which would have to allow the GET through anyway.
+    if request.method in ("PATCH", "DELETE") and not can_review(request.user):
+        raise PermissionDenied(CanReviewApplicants.message)
 
     if request.method == "DELETE":
         if application.cv:
@@ -202,7 +251,7 @@ def admin_application_cv(request, application_id):
         if problem:
             raise PermissionDenied(problem)
     elif not request.user.is_authenticated:
-        # Match IsAdminUser exactly: 401 when nobody is logged in, 403 when
+        # Match the IsStaff permission exactly: 401 when nobody is logged in, 403 when
         # someone is but isn't staff. A blanket 401 would tell a signed-in
         # non-staff user to "authenticate", which they already have.
         raise NotAuthenticated()
@@ -227,7 +276,7 @@ def admin_application_cv(request, application_id):
 
 
 @api_view(["POST"])
-@permission_classes([IsAdminUser])
+@permission_classes([CanReviewApplicants])
 def admin_applications_bulk(request):
     """
     Act on several applicants at once (used by the staff panel's checkboxes).
@@ -269,7 +318,7 @@ def admin_applications_bulk(request):
 
 
 @api_view(["GET"])
-@permission_classes([IsAdminUser])
+@permission_classes([IsStaff])
 def admin_application_quiz(request, application_id):
     """Per-question breakdown of an applicant's quiz (with correct answers)."""
     application = get_object_or_404(Application, pk=application_id)

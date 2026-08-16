@@ -333,7 +333,19 @@ python manage.py createsuperuser            # create your staff / admin login
 ```
 
 `createsuperuser` prompts for a username, email, and password — this account can sign in to both the
-staff panel (`/panel/`) and the Django admin (`/admin/`).
+staff panel (`/panel/`) and the Django admin (`/admin/`), with full reviewer rights.
+
+**Optional — a read-only account** for colleagues who should see applicants but change nothing:
+
+```bash
+python manage.py create_viewer amina --email amina@example.org
+```
+
+It prompts for a password. The account can sign in to `/panel/` and browse counts, the applicant
+list, details, CV downloads and quiz breakdowns, but **cannot** set decisions, run bulk actions,
+delete, or export the CSV — the panel hides those controls and the API returns 403 either way. Use
+`--revoke` to promote one to a full reviewer later. (Membership of the "Applicant viewers" group is
+what marks the account, so you can also flip it from Django admin.)
 
 **If step 8b reported a problem, read this before retrying:**
 

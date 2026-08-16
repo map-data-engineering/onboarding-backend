@@ -27,6 +27,10 @@ Bayesian statistics.
   from the answers, and kept separate from the staff's own `decision` (Selected/Rejected).
 - **Custom admin API** — staff-only, token-authenticated endpoints to list applicants (searchable and
   filterable by status), view details + CV, and see a per-question quiz breakdown.
+- **CSV export** — download the applicants matching the current search/status filters, so the file
+  contains exactly the rows on screen.
+- **Two staff tiers** — *reviewers* (full access) and *viewers*, a read-only account that can see
+  applicant counts, details and quiz breakdowns but cannot change decisions, delete or export.
 - **Same-origin frontend** — lightweight HTML/JS pages served by Django, so the browser calls `/api/`
   with no CORS setup.
 
@@ -150,6 +154,7 @@ All endpoints live under `/api/`.
 | POST | `/api/admin/logout/` | Invalidate token |
 | GET | `/api/admin/me/` | Current staff user |
 | GET | `/api/admin/applications/` | List applicants (`?search=`, `?status=pass\|fail\|pending`, `?page=`) |
+| GET | `/api/admin/applications/export/` | CSV of the filtered applicants (reviewers only) |
 | GET | `/api/admin/applications/{id}/` | Applicant detail + CV URL |
 | GET | `/api/admin/applications/{id}/quiz/` | Per-question breakdown |
 
@@ -174,7 +179,23 @@ Full request/response shapes and frontend integration notes are in
 | `python manage.py seed_questions` | Load/refresh the 12 quiz questions (idempotent — see below) |
 | `python manage.py migrate` | Apply database migrations |
 | `python manage.py collectstatic` | Gather static files (for production) |
-| `python manage.py createsuperuser` | Create a staff/admin account |
+| `python manage.py createsuperuser` | Create a staff/admin account (full reviewer) |
+| `python manage.py create_viewer <username>` | Create a **view-only** staff account |
+
+### Staff roles
+
+| Role | How to create | Can do |
+|------|---------------|--------|
+| **Reviewer** | `createsuperuser`, or any `is_staff` account | Everything: decisions, bulk actions, delete, CSV export |
+| **Viewer** | `create_viewer <username>` | Read-only: applicant count, list, details, CV download, quiz breakdown |
+
+A viewer is a normal staff account placed in the **"Applicant viewers"** group, so you can also
+toggle the role from Django admin (add/remove the group) without touching code. `create_viewer
+<username> --revoke` promotes one back to a full reviewer, and superusers are never treated as
+view-only.
+
+The panel hides the controls a viewer can't use, but that's cosmetic — `PATCH`, `DELETE`,
+`/bulk/` and `/export/` all return **403** for them regardless of what the browser sends.
 
 ### Editing the question set
 

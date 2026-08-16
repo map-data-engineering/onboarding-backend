@@ -340,7 +340,18 @@ Django admin). Token auth does **not** require a CSRF header.
 // 401 -> { detail: "Invalid credentials or not a staff account." }
 ```
 
-**Who am I** — `GET /api/admin/me/` → `{ username, email, is_superuser }` (validate a saved token on load).
+**Who am I** — `GET /api/admin/me/` → `{ username, email, is_superuser, role, can_review, can_export }`
+(validate a saved token on load). The same object is returned as `user` by login.
+
+- **`role`** is `"reviewer"` or `"viewer"`. A **viewer** is a staff account restricted to reading:
+  applicant counts, the list, details, CV downloads and quiz breakdowns.
+- **`can_review`** — false for viewers. Use it to hide the decision buttons, delete button, bulk
+  toolbar and row checkboxes.
+- **`can_export`** — false for viewers; hide the CSV export button.
+
+> Treat these as *display* hints only. Every write endpoint plus `/export/` re-checks server-side and
+> returns **403** `{"detail": "Your account has view-only access to applicants."}`, so a viewer who
+> crafts the request by hand still gets nowhere.
 
 **Logout** — `POST /api/admin/logout/` → `204`, invalidates the current token.
 
@@ -368,6 +379,31 @@ Django admin). Token auth does **not** require a CSRF header.
   separate thing from `status`. Show both; don't conflate them.
 - `quiz_status` is one of `"not_started" | "in_progress" | "completed"`. `score`/`total` are `null`
   until a quiz exists.
+
+**Export CSV** — `GET /api/admin/applications/export/` — **reviewers only** (403 for viewers).
+
+Takes the *same* `?search=` and `?status=` params as the list, so the download contains exactly the
+filtered rows. Responds with `text/csv` and a `Content-Disposition` filename
+(`applicants-<YYYYMMDD-HHMM>.csv`), 27 columns including contact details, status, score, decision and
+an absolute CV URL.
+
+A plain `<a href>` **cannot** download it — the link carries no `Authorization` header. Fetch it and
+hand the browser a blob:
+
+```js
+const res = await fetch(`${API}/admin/applications/export/?status=pass`, {
+  headers: { Authorization: `Token ${token}` },
+});
+const url = URL.createObjectURL(await res.blob());
+const a = Object.assign(document.createElement("a"), { href: url, download: "applicants.csv" });
+a.click();
+URL.revokeObjectURL(url);
+```
+
+> Values that begin with `=`, `+`, `-` or `@` are prefixed with `'` in the file. Applicants write the
+> motivation and expectations fields themselves, and spreadsheets execute cells starting with those
+> characters — the prefix keeps the text readable and inert. The file also carries a UTF-8 BOM so
+> Excel renders accented names correctly.
 
 **Applicant detail** — `GET /api/admin/applications/{id}/` → all profile fields + an absolute `cv`
 URL + `status`, `pass_mark`, `decision`, `decision_at`, `final_submitted_at`, and quiz summary
@@ -469,6 +505,7 @@ For ready-to-run request examples (Thunder Client), see `README_API_TESTING.md` 
 | POST   | `/api/admin/logout/`                          | —                      | Token           | Invalidate token                  |
 | GET    | `/api/admin/me/`                              | —                      | Token           | Current staff user                |
 | GET    | `/api/admin/applications/`                    | —                      | Token           | List applicants (`?search=`,`?status=`,`?page=`) |
+| GET    | `/api/admin/applications/export/`             | —                      | Token (reviewer) | CSV of the filtered applicants    |
 | POST   | `/api/admin/applications/bulk/`               | `{ids,action}`         | Token           | Bulk select/reject/pending/delete |
 | GET    | `/api/admin/applications/{id}/`               | —                      | Token           | Applicant detail + CV + decision  |
 | PATCH  | `/api/admin/applications/{id}/`               | `{"decision": ""}`     | Token           | Set decision                      |
