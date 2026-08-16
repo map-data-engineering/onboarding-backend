@@ -281,7 +281,10 @@ document.getElementById("export-csv").addEventListener("click", async (e) => {
     document.body.appendChild(a);
     a.click();
     a.remove();
-    URL.revokeObjectURL(url);
+    // Revoking straight away can cancel the download before the browser has
+    // finished reading the blob (Firefox and Safari in particular). Let the
+    // download get under way first; the URL is released shortly after.
+    setTimeout(() => URL.revokeObjectURL(url), 30000);
   } catch (err) {
     listAlert.textContent = err.message || "Could not export applicants.";
     listAlert.classList.remove("d-none");

@@ -405,9 +405,17 @@ pip install -r requirements-prod.txt      # only if dependencies changed
 python manage.py migrate                  # only if there are new migrations
 python manage.py seed_questions           # only if the question list changed
 python manage.py collectstatic --noinput  # only if static files or templates changed
+python manage.py check                    # reports application.W001 if a static file was missed
 ```
 
 Then click **Reload** on the **Web** tab. A reload is required for any change to take effect.
+
+> **If `check` reports `application.W001`, do not skip it.** It means `STATIC_ROOT` holds a different
+> version of a `.js`/`.css` file (or of its `.gz`) than the source, which is the one failure that
+> produces no error anywhere: templates are read fresh on every request, so the page renders the new
+> markup, while WhiteNoise serves months-old JavaScript underneath it. Buttons appear and do nothing.
+> Re-run `collectstatic --noinput` and Reload; if the warning persists, `collectstatic --noinput --clear`
+> rebuilds the directory from scratch.
 
 > **Tip:** put the `export` lines in `~/.bashrc` so every new console already has them
 > (`source ~/.bashrc` to apply immediately). Skipping them is what silently creates a stray
@@ -426,6 +434,12 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 > **Standalone frontends need no change.** They render the `cv` field as a link, and that field now
 > carries a signature, so the link works as it always did. Rotating `DJANGO_SECRET_KEY` invalidates
 > every outstanding signature — harmless, since a page reload mints new ones.
+
+> **Upgrading to the CSV export:** run `collectstatic --noinput --clear` once (not just `collectstatic`).
+> Static compression used to be enabled only when `DEBUG` was off, so servers carry `.gz` files that
+> `collectstatic` will not refresh on its own — and those are what browsers actually receive. `--clear`
+> rebuilds them. Compression is now on unconditionally, so ordinary `collectstatic` keeps them in step
+> from here on.
 
 > **Upgrading to the two-stage intake:** this release ships migration
 > `0004_application_final_submitted_at_alter_application_cv`, so `migrate` is **required**, and the
@@ -467,7 +481,7 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | Download CV returns **404** in the panel | The row references a file that is no longer in `media/` (e.g. restored database without restoring `media/`) | Check `ls media/cvs/`; restore the media backup (section 12) |
 | Download CV returns **401** | The link lost its `?sig=`, or the staff token expired | Reload the applicant page to mint a fresh link; log out and back in if the whole panel 401s |
 | Download CV returns **403** "link has expired" | The page sat open longer than `CV_LINK_MAX_AGE` (15 min) | Reload the applicant detail page — that mints a new signature |
-| Download CV does nothing when clicked | The browser is running an old `panel.js` | Run `collectstatic --noinput`, Reload, then hard-refresh with Ctrl+Shift+R |
+| A panel button (Download CV, **Export CSV**, …) does nothing when clicked | The browser is running an old `panel.js` — most often a stale `panel.js.gz`, which WhiteNoise serves in preference to the plain file | Run `collectstatic --noinput`, then Reload. `manage.py check` now reports this as `application.W001` before you deploy; `curl` will *not* show it, because it does not ask for gzip |
 | An applicant has **no CV / empty motivation** | Status is **Fail**, so the final step never unlocked | Expected — check their status/score on the detail page |
 | Final step returns **403** | Quiz unfinished, or score below the pass mark | Expected — the gate is server-side (section 13) |
 | Portal **skips the details form** and 404s on quiz start | Stale `application_id` in the browser's `localStorage` (e.g. the applicant was deleted) | Fixed in the current release — the portal validates via `/api/applications/{id}/status/`. Make sure `collectstatic` ran and the browser reloaded the new `applicant.js` |

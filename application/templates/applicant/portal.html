@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static assets %}
 {% block title %}Apply — Onboarding Portal{% endblock %}
 
 {% block body %}
@@ -259,6 +259,6 @@
 
 </div>
 
-<script src="{% static 'js/api.js' %}"></script>
-<script src="{% static 'js/applicant.js' %}"></script>
+<script src="{% static_v 'js/api.js' %}"></script>
+<script src="{% static_v 'js/applicant.js' %}"></script>
 {% endblock %}

@@ -166,20 +166,27 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 STORAGES = {
     "default": {"BACKEND": "django.core.files.storage.FileSystemStorage"},
-    "staticfiles": {"BACKEND": "django.contrib.staticfiles.storage.StaticFilesStorage"},
+    # Compressed, but deliberately NOT the Manifest variant: manifest storage
+    # aborts collectstatic if any CSS references a file that isn't there, and it
+    # was already switched off on the server. Filenames stay unhashed, so
+    # templates use {% static_v %} to append a content fingerprint instead.
+    #
+    # This is set unconditionally, and that matters. It used to live under
+    # `if not DEBUG`, which meant collectstatic wrote the .gz/.br siblings only
+    # when it happened to be run with DEBUG off. Run from an ordinary shell --
+    # which is what the deploy notes said to do -- it refreshed panel.js and left
+    # panel.js.gz untouched, and WhiteNoise hands the .gz to every browser that
+    # advertises gzip. The panel then rendered new markup over months-old
+    # JavaScript, and buttons for anything recently added quietly did nothing.
+    # Compressing in development too costs a second of collectstatic and keeps
+    # the two copies from ever disagreeing.
+    "staticfiles": {"BACKEND": "whitenoise.storage.CompressedStaticFilesStorage"},
 }
 
 # --- Production hardening (only active when DEBUG is off) ---------------------
 # PythonAnywhere terminates HTTPS in front of the app, so trust its proxy header
 # and only send cookies over HTTPS.
 if not DEBUG:
-    # Let WhiteNoise compress and cache-bust static files in production.
-    # Compressed, but deliberately NOT the Manifest variant: manifest storage
-    # aborts collectstatic if any CSS references a file that isn't there, and it
-    # was already switched off on the server. Filenames are therefore unhashed,
-    # so a browser may hold a stale panel.js for up to WhiteNoise's max-age --
-    # hard-refresh the panel after deploying frontend changes.
-    STORAGES["staticfiles"]["BACKEND"] = "whitenoise.storage.CompressedStaticFilesStorage"
     SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
     SESSION_COOKIE_SECURE = True
     CSRF_COOKIE_SECURE = True

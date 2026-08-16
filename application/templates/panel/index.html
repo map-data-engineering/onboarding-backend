@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% load static %}
+{% load static assets %}
 {% block title %}Staff Panel — Onboarding{% endblock %}
 
 {% block body %}
@@ -159,6 +159,6 @@
 
 </div>
 
-<script src="{% static 'js/api.js' %}"></script>
-<script src="{% static 'js/panel.js' %}"></script>
+<script src="{% static_v 'js/api.js' %}"></script>
+<script src="{% static_v 'js/panel.js' %}"></script>
 {% endblock %}
