@@ -9,11 +9,12 @@ gzip and WhiteNoise only substitutes the stale .gz for clients that do.
 """
 
 import gzip
+import re
 import shutil
 import tempfile
 from pathlib import Path
 
-from django.test import SimpleTestCase, override_settings
+from django.test import SimpleTestCase, TestCase, override_settings
 
 from application.checks import check_collected_static_is_current
 
@@ -82,3 +83,35 @@ class StaticFreshnessCheckTests(SimpleTestCase):
         (self.source_dir / "img" / "logo.png").write_bytes(b"not-really-a-png")
         self.collected.write_bytes(CURRENT)
         self.assertEqual(self.run_check(), [])
+
+
+class CsrfTokenMetaTests(TestCase):
+    """
+    Every page must expose a usable CSRF token to api.js.
+
+    Without it the panel sent an empty X-CSRFToken header, and Django rejected
+    that as "CSRF token ... has incorrect length" -- but only for staff who also
+    had a Django session, since DRF's SessionAuthentication is what enforces CSRF.
+    A clean browser signed in fine, which is exactly why this survived testing.
+    """
+
+    PAGES = {"applicant portal": "/", "staff panel": "/panel/"}
+
+    def test_pages_expose_a_valid_csrf_token(self):
+        for label, url in self.PAGES.items():
+            with self.subTest(page=label):
+                html = self.client.get(url).content.decode()
+                match = re.search(r'<meta name="csrf-token" content="([^"]*)"', html)
+                self.assertIsNotNone(match, f"{label} has no csrf-token meta tag")
+                token = match.group(1)
+                # Django rejects anything that is not CSRF_TOKEN_LENGTH characters.
+                self.assertEqual(len(token), 64, f"{label} rendered a {len(token)}-char token")
+                self.assertRegex(token, r"^[A-Za-z0-9]+$")
+
+    def test_template_comments_do_not_leak_into_the_markup(self):
+        """A multi-line {# #} renders literally; {% comment %} is required."""
+        for label, url in self.PAGES.items():
+            with self.subTest(page=label):
+                html = self.client.get(url).content.decode()
+                self.assertNotIn("{#", html)
+                self.assertNotIn("SessionAuthentication", html)

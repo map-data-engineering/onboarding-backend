@@ -12,13 +12,30 @@ class ApiError extends Error {
   }
 }
 
+const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
 // CSRF token rendered into the page by Django. Sent on unsafe requests so DRF's
 // SessionAuthentication accepts them (the session cookie rides along same-origin).
+//
+// The cookie is the fallback rather than the primary source because a page can be
+// served before Django has had reason to set it; the meta tag is always current.
 function csrfToken() {
   const meta = document.querySelector('meta[name="csrf-token"]');
-  return meta ? meta.getAttribute("content") : "";
+  const fromMeta = meta ? (meta.getAttribute("content") || "").trim() : "";
+  if (fromMeta) return fromMeta;
+  const cookie = document.cookie.match(/(?:^|;\s*)csrftoken=([^;]*)/);
+  return cookie ? decodeURIComponent(cookie[1]) : "";
 }
-const UNSAFE = new Set(["POST", "PUT", "PATCH", "DELETE"]);
+
+// Attach the header only when we actually have a token. Sending an empty one is
+// worse than sending none: Django rejects it as "CSRF token ... has incorrect
+// length", which reads like the token is corrupt rather than absent.
+function withCsrf(headers, method) {
+  if (!UNSAFE.has(method)) return headers;
+  const token = csrfToken();
+  if (token) headers["X-CSRFToken"] = token;
+  return headers;
+}
 
 async function parseBody(res) {
   const ctype = res.headers.get("content-type") || "";
@@ -33,7 +50,7 @@ async function apiJson(method, path, body, token) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Token ${token}`;
-  if (UNSAFE.has(method)) headers["X-CSRFToken"] = csrfToken();
+  withCsrf(headers, method);
 
   const res = await fetch(`${API}${path}`, {
     method,
@@ -48,8 +65,7 @@ async function apiJson(method, path, body, token) {
 // Multipart request (used only for the application form + CV upload).
 // NOTE: never set Content-Type yourself -- the browser adds the multipart boundary.
 async function apiForm(method, path, formData) {
-  const headers = {};
-  if (UNSAFE.has(method)) headers["X-CSRFToken"] = csrfToken();
+  const headers = withCsrf({}, method);
   const res = await fetch(`${API}${path}`, { method, headers, body: formData });
   const data = await parseBody(res);
   if (!res.ok) throw new ApiError(res.status, data);

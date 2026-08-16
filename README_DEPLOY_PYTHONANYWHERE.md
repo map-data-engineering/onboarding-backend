@@ -477,6 +477,7 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 |---------|--------------|-----|
 | `DisallowedHost` / HTTP 400 | Domain not in `ALLOWED_HOSTS` | Correct `DJANGO_ALLOWED_HOSTS` in the WSGI file, then Reload. Stray spaces around the value are stripped automatically |
 | Admin login fails with a **CSRF** error | Trusted origin not set | Set `DJANGO_CSRF_TRUSTED_ORIGINS=https://MAPDET.pythonanywhere.com` (your host), then Reload |
+| Panel sign-in fails with **"CSRF token from the 'X-Csrftoken' HTTP header has incorrect length"** | The page served no `<meta name="csrf-token">`, so the panel sent an empty header. Only affects staff who are *also* signed in to `/admin/` in the same browser — that session is what makes DRF enforce CSRF at all | Fixed in the current release. Run `collectstatic --noinput` and Reload; the tag is in `base.html` and `api.js` now falls back to the `csrftoken` cookie |
 | Pages load but have **no styling** | `collectstatic` not run | Run `python manage.py collectstatic --noinput`, then Reload |
 | Download CV returns **404** in the panel | The row references a file that is no longer in `media/` (e.g. restored database without restoring `media/`) | Check `ls media/cvs/`; restore the media backup (section 12) |
 | Download CV returns **401** | The link lost its `?sig=`, or the staff token expired | Reload the applicant page to mint a fresh link; log out and back in if the whole panel 401s |
