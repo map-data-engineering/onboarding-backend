@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from . import assessment
+from . import assessment, validators
 from .models import Application, Question, QuizSession, SessionQuestion
 from .services import GRACE_SECONDS, PASS_MARK, _deadline, has_passed, options_for
 
@@ -51,11 +51,13 @@ class ExperienceSerializer(serializers.ModelSerializer):
 
 
 class ApplicationFinalStepSerializer(serializers.ModelSerializer):
-    """Step 6 — the applicant's own work, plus the CV upload."""
+    """Step 6 — the applicant's own work, motivation and expectations, plus the CV."""
 
     class Meta:
         model = Application
         fields = [
+            "motivation",
+            "expectations",
             "written_dataset",
             "written_code",
             "written_why_not_ols",
@@ -64,11 +66,24 @@ class ApplicationFinalStepSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             "cv": {"required": True, "allow_null": False},
+            "motivation": {"required": True, "allow_blank": False},
+            "expectations": {"required": True, "allow_blank": False},
             "written_dataset": {"required": True, "allow_blank": False},
             "written_code": {"required": True, "allow_blank": False},
             "written_why_not_ols": {"required": True, "allow_blank": False},
             "written_other": {"required": False, "allow_blank": True},
         }
+
+    # 300 words each. The textareas carry a maxlength and a live counter, but a
+    # character cap is not a word cap and neither survives a hand-made request.
+    def validate_motivation(self, value):
+        return validators.validate_word_limit(value, label="Your motivation")
+
+    def validate_expectations(self, value):
+        return validators.validate_word_limit(value, label="Your expectations")
+
+    def validate_written_other(self, value):
+        return validators.validate_word_limit(value, label="This answer")
 
     # Minimums matching the prompts' "about 80 words" / "a sentence or two", so a
     # single character can't pass for an answer. Deliberately low: the panel
@@ -76,12 +91,16 @@ class ApplicationFinalStepSerializer(serializers.ModelSerializer):
     def validate_written_dataset(self, value):
         if len(value.strip()) < 25:
             raise serializers.ValidationError("Please describe the dataset in a sentence or two.")
-        return value
+        return validators.validate_word_limit(value, label="This answer")
 
     def validate_written_why_not_ols(self, value):
         if len(value.strip()) < 15:
             raise serializers.ValidationError("A sentence is enough, but please answer.")
-        return value
+        return validators.validate_word_limit(value, label="This answer")
+
+    def validate_cv(self, value):
+        """PDF only, 5 MB, 2 pages — see validators.validate_cv."""
+        return validators.validate_cv(value)
 
 
 class QuestionPublicSerializer(serializers.ModelSerializer):

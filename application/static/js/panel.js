@@ -292,8 +292,8 @@ const WRITTEN_FIELDS = [
   ["written_code", "2. Their own R code"],
   ["written_why_not_ols", "3. Why OLS would be a poor choice"],
   ["written_other", "4. Anything else"],
-  ["motivation", "Motivation (legacy form)"],
-  ["expectations", "Expectations (legacy form)"],
+  ["motivation", "5. Motivation"],
+  ["expectations", "6. Expectations"],
 ];
 
 let currentDetailId = null;

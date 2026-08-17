@@ -103,8 +103,8 @@ class Application(models.Model):
     written_why_not_ols = models.TextField(blank=True)  # why OLS would be a poor choice
     written_other = models.TextField(blank=True)        # anything else for the panel
 
-    # Free text from the original single-page form. Kept so applications taken
-    # before the 7-step journey still read back in the panel and the CSV.
+    # Also step 6. Capped at 300 words each by the serializer (not at the DB
+    # level, so the limit can change without a migration).
     motivation = models.TextField(blank=True)
     expectations = models.TextField(blank=True)
 

@@ -58,8 +58,8 @@ COLUMNS = [
     ("written_code", "Own R code"),
     ("written_why_not_ols", "Why not OLS"),
     ("written_other", "Anything else"),
-    ("motivation", "Motivation (legacy)"),
-    ("expectations", "Expectations (legacy)"),
+    ("motivation", "Motivation"),
+    ("expectations", "Expectations"),
     ("cv_url", "CV URL"),
 ]
 

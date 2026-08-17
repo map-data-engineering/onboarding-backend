@@ -423,16 +423,68 @@ function showResult(result) {
   else LS.appId = null;
 }
 
-const WRITTEN_FIELDS = ["written_dataset", "written_code", "written_why_not_ols", "written_other"];
+const WRITTEN_FIELDS = ["written_dataset", "written_code", "written_why_not_ols",
+                        "written_other", "motivation", "expectations"];
+
+// Same rule as the server (validators.count_words): whitespace-delimited.
+const countWords = (text) => (text.match(/\S+/g) || []).length;
+
+function wireWordCounters() {
+  $$("[data-words]").forEach((field) => {
+    const limit = Number(field.dataset.words);
+    const readout = stage.querySelector(`[data-counter-for="${field.name}"]`);
+    if (!readout) return;
+    const update = () => {
+      const words = countWords(field.value);
+      readout.textContent = `${words} / ${limit} words`;
+      // Colour only once they are over -- a counter that shouts at 250 is noise.
+      readout.style.color = words > limit ? "var(--bad)" : "";
+      readout.style.fontWeight = words > limit ? "600" : "";
+    };
+    field.addEventListener("input", update);
+    update();
+  });
+}
+
+const CV_MAX_BYTES = 5 * 1024 * 1024;
+
+function localChecksPass(file) {
+  let ok = true;
+  const fail = (field, message) => {
+    const box = stage.querySelector(`[data-error="${field}"]`);
+    if (box) box.textContent = message;
+    ok = false;
+  };
+
+  $$("[data-words]").forEach((field) => {
+    const limit = Number(field.dataset.words);
+    const words = countWords(field.value);
+    if (words > limit) fail(field.name, `${words} words — please shorten to ${limit} or fewer.`);
+  });
+
+  if (!file) fail("cv", "Please attach your CV.");
+  else if (!file.name.toLowerCase().endsWith(".pdf"))
+    fail("cv", "Your CV must be a PDF. Export from Word rather than renaming the file.");
+  else if (file.size > CV_MAX_BYTES)
+    fail("cv", `That file is ${(file.size / 1048576).toFixed(1)} MB. The limit is 5 MB.`);
+
+  if (!ok) alertBox("Please correct the highlighted answers.");
+  return ok;
+}
 
 function stepWritten() {
   show("tpl-written", 5);
+  wireWordCounters();
   $("[data-next]").addEventListener("click", async (e) => {
     clearErrors();
     const form = new FormData();
     WRITTEN_FIELDS.forEach((n) => form.append(n, stage.querySelector(`[name="${n}"]`).value.trim()));
     const file = stage.querySelector('[name="cv"]').files[0];
     if (file) form.append("cv", file);
+
+    // Fail fast on the two things we can see without a round trip. The server
+    // re-checks all of it (and the page count, which we can't check here).
+    if (!localChecksPass(file)) return;
 
     const done = busy(e.currentTarget, "Submitting…");
     try {

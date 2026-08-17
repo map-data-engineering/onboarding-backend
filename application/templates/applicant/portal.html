@@ -253,12 +253,32 @@
   <div class="field-error" data-error="written_why_not_ols"></div>
 
   <label>4. Anything else the panel should know? <span class="opt-tag">(optional)</span></label>
-  <textarea name="written_other" maxlength="600"></textarea>
+  <textarea name="written_other" maxlength="600" data-words="300"></textarea>
+  <p class="hint" data-counter-for="written_other"></p>
   <div class="field-error" data-error="written_other"></div>
 
-  <label>5. Your CV <span class="req">*</span></label>
-  <p class="hint">PDF or Word document.</p>
-  <input type="file" name="cv" accept=".pdf,.doc,.docx">
+  <h2>Motivation and expectations</h2>
+
+  <label>5. Why do you want to take part? <span class="req">*</span></label>
+  <p class="hint">Up to 300 words.</p>
+  <textarea name="motivation" data-words="300"></textarea>
+  <p class="hint" data-counter-for="motivation"></p>
+  <div class="field-error" data-error="motivation"></div>
+
+  <label>6. What do you expect to get out of it? <span class="req">*</span></label>
+  <p class="hint">Up to 300 words.</p>
+  <textarea name="expectations" data-words="300"></textarea>
+  <p class="hint" data-counter-for="expectations"></p>
+  <div class="field-error" data-error="expectations"></div>
+
+  <h2>Your CV</h2>
+
+  <label>7. Upload your CV <span class="req">*</span></label>
+  <p class="hint">
+    <strong>PDF only</strong>, at most <strong>2 pages</strong> and <strong>5&nbsp;MB</strong>.
+    Word documents are not accepted — export to PDF first.
+  </p>
+  <input type="file" name="cv" accept="application/pdf,.pdf">
   <div class="field-error" data-error="cv"></div>
 
   <div class="err hidden" data-alert></div>
