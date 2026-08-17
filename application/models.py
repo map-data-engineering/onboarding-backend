@@ -109,7 +109,7 @@ class Application(models.Model):
     expectations = models.TextField(blank=True)
 
     # File upload — also collected in the final step (see PASS_MARK in services.py).
-    cv = models.FileField(upload_to="cvs/", blank=False)
+    cv = models.FileField(upload_to="cvs/", blank=True)
 
     # Set when the applicant completes the final step (motivation/expectations/CV).
     final_submitted_at = models.DateTimeField(null=True, blank=True)
