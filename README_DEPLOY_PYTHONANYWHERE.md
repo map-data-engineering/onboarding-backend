@@ -378,7 +378,8 @@ The frontend and API share one origin, so the pages call `/api/...` directly wit
 
 **Smoke-test the whole journey** before announcing the URL: open the portal, fill in the details form,
 click Next, answer the quiz, and confirm that a score of 7+ unlocks the final CV/motivation step and
-that the CV downloads from the staff panel afterwards. That exercises MySQL writes, the CV download
+that the CV downloads from the staff panel afterwards. Note: the CV must be a PDF (max 2 pages), and 
+motivation/expectations are required (max 300 words each). That exercises MySQL writes, the CV download
 endpoint and the pass-mark gate in one pass.
 
 ---
@@ -532,7 +533,7 @@ To change it, edit that line, `git pull` on the server, and **Reload**. No migra
 
 | Status | Meaning |
 |--------|---------|
-| **Pass** | Quiz finished with a score **≥ 7** — the final step (CV, motivation, expectations) is unlocked |
+| **Pass** | Quiz finished with a score **≥ 7** — the final step (PDF CV, motivation, expectations) is unlocked |
 | **Fail** | Quiz finished **below 7** — the journey ends at the results screen; no CV is ever collected |
 | **Pending** | Quiz not started, or still in progress |
 

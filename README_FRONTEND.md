@@ -49,7 +49,8 @@ const API = "/api";   // e.g. fetch(`${API}/applications/`)
 
 The journey has **seven steps**, and every one is persisted server-side as it is completed. The
 **written answers and CV are collected at the very end**, and only from applicants who score at least
-the pass mark (**7**, `PASS_MARK`).
+the pass mark (**7**, `PASS_MARK`). The motivation and expectations are mandatory, and the CV must be 
+a PDF (max 2 pages, 5MB).
 
 ```
 Step 1  POST /applications/                              -> create the applicant (details only)
@@ -312,7 +313,9 @@ const unlocked = result.passed && !result.final_submitted;
 | `written_code`        | textarea | required — 5–15 lines of their own R, or `none` |
 | `written_why_not_ols` | textarea | required — why OLS would be a poor choice (≥15 chars) |
 | `written_other`       | textarea | optional                                     |
-| `cv`                  | **file** | required — PDF/DOC upload                    |
+| `motivation`          | textarea | required (max 300 words)                     |
+| `expectations`        | textarea | required (max 300 words)                     |
+| `cv`                  | **file** | required — **PDF only** (max 2 pages, 5MB)   |
 
 ```js
 const form = new FormData();

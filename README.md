@@ -3,8 +3,8 @@
 A Django + Django REST Framework application for running an **applicant intake + timed knowledge
 check**. Candidates fill in their details, take a **shuffled, per-question timed quiz** whose clock
 is enforced by the server, and — only if they score at least the pass mark — complete their
-application with their motivation, expectations and CV. Staff review applicants and scores through a
-**custom token-authenticated admin API** (and a built-in admin panel).
+application with their mandatory motivation, expectations and a PDF CV (max 2 pages). Staff review
+applicants and scores through a **custom token-authenticated admin API** (and a built-in admin panel).
 
 Originally built as an onboarding/recruitment tool for applicants in R programming, spatial data and
 Bayesian statistics.
@@ -23,7 +23,8 @@ Bayesian statistics.
   admitting you don't know it. Which names are fake is only ever known server-side, so it can't be
   read out of the page source.
 - **Gated final step** — the written answers and CV upload are unlocked only for applicants scoring
-  **7 or more** (`PASS_MARK`). Enforced server-side, not just hidden in the UI.
+  **7 or more** (`PASS_MARK`). The final step requires a **motivation statement**, **expectations**, and a
+  **PDF CV** (strictly validated: max 2 pages, max 5MB). Enforced server-side, not just hidden in the UI.
 - **Composite score /100** — knowledge 45 + honesty 20 + relevance 20 + impact 15, plus review flags
   (`BLUFF`, `NO-CODE`, `RUSHED`, `INCONSISTENT`, `UNFUNDED`, …). Derived on read, so it can never
   drift from the answers.
@@ -182,7 +183,9 @@ Full request/response shapes and frontend integration notes are in
 ## Testing the API
 
 - **Fast end-to-end check:** `python demo_fill.py` creates an applicant, takes the whole quiz, prints
-  the score (`Score: 12 / 12`), then submits the final step (motivation, expectations, CV). Options: `--base-url`, `--answers correct|first`.
+  the score (`Score: 12 / 12`), then submits the final step (motivation, expectations, CV).
+  The motivation and expectations are capped at 300 words each, and the CV must be a valid PDF.
+  Options: `--base-url`, `--answers correct|first`.
 - **Manual / exploratory:** a Thunder Client collection (`thunder-collection_onboarding.json`) and a
   step-by-step guide are provided in `README_API_TESTING.md` (kept locally).
 
