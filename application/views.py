@@ -5,7 +5,7 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
-from . import assessment, services
+from . import assessment, countries, services, validators
 from .models import Application, QuizSession
 from .serializers import (
     AnswerSerializer,
@@ -16,6 +16,33 @@ from .serializers import (
     ExperienceSerializer,
     ResultSerializer,
 )
+
+
+@api_view(["GET"])
+def portal_config(request):
+    """
+    Everything the applicant page needs before it can render a single screen.
+
+    The preparation screen's limits, the deadline, the country dropdowns and the
+    shape of the knowledge check all live server-side, so the page cannot promise
+    "4 MB" while the upload endpoint enforces 5, or say "twelve questions" after
+    the quota changed. The page is copy; this is the source of truth.
+    """
+    return Response(
+        {
+            "contact_email": assessment.portal_setting("CONTACT_EMAIL"),
+            "deadline": assessment.portal_setting("DEADLINE"),
+            "duration": assessment.portal_setting("DURATION"),
+            "funding_gate": assessment.funding_gate(),
+            "limits": {
+                "cv_max_mb": round(validators.CV_MAX_BYTES / (1024 * 1024), 1),
+                "cv_max_pages": validators.CV_MAX_PAGES,
+                "max_words": validators.MAX_WORDS,
+            },
+            "quiz": services.quiz_shape(),
+            "countries": countries.COUNTRY_GROUPS,
+        }
+    )
 
 
 @api_view(["POST"])

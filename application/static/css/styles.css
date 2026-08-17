@@ -221,3 +221,56 @@ dl.fields dd { margin: 0; white-space: pre-wrap; }
   vertical-align: -2px; margin-right: 6px;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ---- Before you begin (preparation screen) ------------------------------- */
+ol.prep { margin: 8px 0 22px; padding-left: 0; list-style: none; counter-reset: prep; }
+ol.prep li {
+  counter-increment: prep; position: relative; padding: 14px 0 14px 40px;
+  border-bottom: 1px solid var(--line);
+}
+ol.prep li::before {
+  content: counter(prep); position: absolute; left: 0; top: 14px;
+  width: 26px; height: 26px; border-radius: 50%; background: var(--gold);
+  color: var(--black); font-family: var(--head); font-weight: 700; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+}
+ol.prep li p { margin: 0 0 10px; font-size: 14.5px; color: var(--grey); }
+/* Colour is not the only cue: the row is also the one still holding an empty box. */
+ol.prep li.unticked::before { background: #e8e6e2; color: var(--grey); }
+label.tick {
+  display: flex; gap: 9px; align-items: flex-start; margin: 0; cursor: pointer;
+  font-family: var(--body); font-weight: 400; font-size: 14px;
+}
+label.tick input { width: auto; margin: 2px 0 0; accent-color: var(--charcoal); flex: none; }
+
+/* Applicants read this on a phone and draft their answers elsewhere; print gives
+   them something to work from offline. Strip the chrome and the controls. */
+@media print {
+  .site-header, .steps, .actions, .warnbox { display: none !important; }
+  body { background: #fff; }
+  .card { border: none; box-shadow: none; padding: 0; }
+  ol.prep li { break-inside: avoid; }
+  label.tick { border: 1px solid var(--warm); padding: 6px 8px; border-radius: 6px; }
+  label.tick input { display: none; }
+  label.tick span::before { content: "☐  "; }
+}
+
+/* ---- Shortlist builder (staff panel) ------------------------------------- */
+.stats { display: flex; gap: 10px; flex-wrap: wrap; margin-bottom: 14px; }
+.stat {
+  background: var(--light); border: 1px solid var(--line); border-radius: var(--radius);
+  padding: 10px 14px; min-width: 104px;
+}
+.stat b { display: block; font-family: var(--head); font-size: 21px; line-height: 1.2; }
+.stat span { font-size: 12px; color: var(--grey); }
+.pill {
+  display: inline-block; font-size: 12.5px; font-family: var(--head); font-weight: 700;
+  background: #e8e6e2; color: var(--charcoal); border-radius: 999px;
+  padding: 4px 11px; margin: 0 6px 6px 0;
+}
+.pill.ok { background: #e4efe6; color: var(--ok); }
+.pill.miss { background: #f7e7e3; color: var(--bad); }
+.floors { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 0 14px; }
+.floors label { margin-top: 10px; }
+tr.picked td { background: var(--gold-tint); }
+tr.waiting td { background: #f7f6f3; }

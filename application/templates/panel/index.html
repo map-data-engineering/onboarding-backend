@@ -37,6 +37,10 @@
     <p class="lead" id="list-count"></p>
 
     <div class="toolbar">
+      <button class="btn btn-ghost btn-sm" id="go-shortlist">Build a shortlist &rarr;</button>
+    </div>
+
+    <div class="toolbar">
       <input class="grow" type="text" id="search-input" placeholder="Name, email or institution…">
       <select id="status-filter" style="max-width:190px">
         <option value="">All statuses</option>
@@ -75,6 +79,110 @@
     <div class="actions">
       <button class="btn btn-ghost btn-sm" id="prev-page" disabled>&larr; Prev</button>
       <button class="btn btn-ghost btn-sm" id="next-page" disabled>Next &rarr;</button>
+    </div>
+  </section>
+
+  {% comment %}
+    Shortlist builder. The whole ranking is shown with the picks marked, not just
+    the picks: the applications the panel most needs to read by hand are the ones
+    immediately either side of the cut line.
+
+    Floors are applied when cutting to the shortlist rather than at the final 25 —
+    a shortlist that is lopsided by gender or institution is very hard to correct
+    afterwards, and at 20:1 two slightly weaker participants cost far less than a
+    homogeneous room does.
+  {% endcomment %}
+  <section id="view-shortlist" class="hidden">
+    <button class="btn btn-ghost btn-sm" id="shortlist-back">&larr; Back to applicants</button>
+
+    <div class="card" style="margin-top:16px">
+      <h1>Shortlist</h1>
+      <p class="lead">
+        Every application ranked on the composite score, recomputed from the stored
+        answers. Floors are satisfied first; the remaining seats fill on merit.
+      </p>
+
+      <div class="stats" id="sl-stats"></div>
+      <div class="note" id="sl-advice"></div>
+
+      <div class="floors">
+        <div>
+          <label for="f_seats">Seats</label>
+          <input type="number" id="f_seats" min="0" value="25">
+        </div>
+        <div>
+          <label for="f_women">Minimum women</label>
+          <input type="number" id="f_women" min="0" value="10">
+        </div>
+        <div>
+          <label for="f_tz">Minimum Tanzania-based</label>
+          <input type="number" id="f_tz" min="0" value="12">
+        </div>
+        <div>
+          <label for="f_inst">Max per institution</label>
+          <input type="number" id="f_inst" min="1" value="3">
+        </div>
+        <div>
+          <label for="f_wait">Waitlist size</label>
+          <input type="number" id="f_wait" min="0" value="10">
+        </div>
+        <div>
+          <label for="f_travel">Travel certainty</label>
+          <select id="f_travel">
+            <option value="prefer" selected>Prefer confirmed</option>
+            <option value="only">Confirmed only</option>
+            <option value="ignore">Ignore</option>
+          </select>
+        </div>
+        <div>
+          <label for="f_bluff">Applicants flagged BLUFF</label>
+          <select id="f_bluff">
+            <option value="1" selected>Exclude</option>
+            <option value="0">Keep</option>
+          </select>
+        </div>
+        <div>
+          <label for="f_pool">Pool</label>
+          <select id="f_pool">
+            <option value="submitted" selected>Completed applications</option>
+            <option value="scored">Finished the knowledge check</option>
+            <option value="all">Everyone who started</option>
+          </select>
+        </div>
+      </div>
+
+      <p class="hint">
+        “Prefer confirmed” fills every seat from applicants with confirmed travel first
+        and uses unconfirmed ones only if seats remain. It costs nothing when confirmed
+        applicants are plentiful and degrades gracefully when they are not.
+      </p>
+
+      <div class="err hidden" id="sl-alert"></div>
+
+      <div class="actions">
+        <button class="btn" id="sl-build">Build shortlist</button>
+        <button class="btn btn-ghost" id="sl-csv">Export full ranking</button>
+        <button class="btn btn-ghost" id="sl-csv-short">Export shortlist + waitlist</button>
+      </div>
+
+      <div id="sl-floors" style="margin-top:16px"></div>
+    </div>
+
+    <div class="card">
+      <div class="table-wrap">
+        <table class="data">
+          <thead>
+            <tr>
+              <th>#</th><th>Name</th><th>Institution</th><th>Country</th><th>Gender</th>
+              <th>Score</th><th>Quiz</th><th>Honest</th><th>Relev</th><th>Impact</th>
+              <th>Place</th><th>Flags</th>
+            </tr>
+          </thead>
+          <tbody id="sl-body">
+            <tr><td colspan="12" class="muted">Loading…</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>
   </section>
 

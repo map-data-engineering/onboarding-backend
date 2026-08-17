@@ -41,8 +41,10 @@ APPLICANT = {
     "first_name": "Ada",
     "last_name": "Lovelace",
     "email": "ada.lovelace@example.org",
+    # Both country fields are dropdowns validated against application/countries.py,
+    # and the phone must carry a country code -- a local "0..." number is rejected.
     "phone": "+44 20 7946 0958",
-    "nationality": "British",
+    "nationality": "United Kingdom",
     "country_of_residence": "United Kingdom",
     "gender": "Female",
     "institution": "Analytical Engine Institute",

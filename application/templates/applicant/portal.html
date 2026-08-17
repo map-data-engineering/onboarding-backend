@@ -29,14 +29,37 @@
   element that swallows the rest of the page.
 {% endcomment %}
 
+{% comment %}
+  Step 0. Applicants who start unprepared either abandon halfway through or paste
+  something thin into the written boxes because they did not know the question was
+  coming; neither tells the panel anything useful about them.
+
+  The tickboxes are not legal cover. Ticking "my CV is a PDF, no more than 2 pages"
+  makes people go and check, which is the entire point -- so the wording stays
+  specific and checkable. "I have read the requirements" would be ticked without
+  anyone opening a file.
+{% endcomment %}
+<template id="tpl-before">
+  <h1>Before you begin</h1>
+  <p class="lead" data-lead></p>
+  <div class="warnbox" data-cost></div>
+
+  <h2>Have these ready</h2>
+  <ol class="prep" data-requirements></ol>
+
+  <p class="muted" data-deadline></p>
+  <div class="err hidden" data-alert></div>
+  <div class="actions">
+    <button class="btn" data-next>Start my application</button>
+    <button class="btn btn-ghost" data-print type="button">Print this list</button>
+  </div>
+</template>
+
 <template id="tpl-details">
   <h1>Apply to the workshop</h1>
-  <p class="lead">
-    About 15 minutes in total: a few questions about your background, a short timed
-    knowledge check, and three brief written answers.
-  </p>
+  <p class="lead" data-lead></p>
   <div class="warnbox">
-    <strong>Before you begin.</strong> Please answer accurately rather than optimistically.
+    <strong>Please answer accurately</strong> rather than optimistically.
     A place offered to someone who cannot take it up is a place lost to another applicant.
   </div>
 
@@ -59,19 +82,32 @@
       <div class="field-error" data-error="email"></div>
     </div>
     <div>
-      <label>Phone — including country code <span class="req">*</span></label>
-      <input type="tel" name="phone" autocomplete="tel" placeholder="+255 …">
-      <p class="hint">Start with <strong>+</strong> and your country code.</p>
+      <label>WhatsApp number — including country code <span class="req">*</span></label>
+      <input type="tel" name="phone" autocomplete="tel" placeholder="+255 712 345 678">
+      <p class="hint">
+        Start with <strong>+</strong> and your country code. A number beginning
+        <strong>0</strong> cannot be dialled from outside your country.
+      </p>
       <div class="field-error" data-error="phone"></div>
     </div>
+    {% comment %}
+      Both country fields are dropdowns, filled from /api/config/ (the 195 UN member
+      states, with Tanzania and its neighbours pinned at the top). Free text gave us
+      "Tanzania", "tanzania" and "United Republic of Tanzania" as three values in one
+      export, and the panel's Tanzania-based floor matches on the stored string.
+    {% endcomment %}
     <div>
       <label>Country of residence <span class="req">*</span></label>
-      <input type="text" name="country_of_residence">
+      <select name="country_of_residence" data-countries>
+        <option value="">Choose…</option>
+      </select>
       <div class="field-error" data-error="country_of_residence"></div>
     </div>
     <div>
       <label>Nationality <span class="req">*</span></label>
-      <input type="text" name="nationality">
+      <select name="nationality" data-countries>
+        <option value="">Choose…</option>
+      </select>
       <div class="field-error" data-error="nationality"></div>
     </div>
     <div>
@@ -180,11 +216,17 @@
 
 <template id="tpl-quiz-intro">
   <h1>Knowledge check</h1>
-  <p class="lead">Twelve multiple-choice questions, one at a time.</p>
+  {% comment %}
+    The count and the timings are filled in from /api/config/ rather than written
+    here: they follow the draw quota and the question bank, and this page said
+    "Twelve multiple-choice questions" through three changes to the question set.
+  {% endcomment %}
+  <p class="lead" data-shape></p>
   <ul class="tight">
-    <li><strong>25 seconds</strong> per question — the countdown is enforced by the server.</li>
+    <li><strong data-timing></strong> per question — the countdown is enforced by the server.</li>
     <li>You <strong>cannot</strong> go back, and the check cannot be restarted.</li>
-    <li>Questions and answer options are shuffled for every applicant.</li>
+    <li>Each applicant gets a <strong>different draw</strong> of questions, with the
+      answer options shuffled.</li>
     <li>You are not told which answers were right — only your final score.</li>
   </ul>
   <div class="note">

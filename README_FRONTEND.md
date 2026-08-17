@@ -47,12 +47,13 @@ const API = "/api";   // e.g. fetch(`${API}/applications/`)
 
 ## 2. The applicant flow (end to end)
 
-The journey has **seven steps**, and every one is persisted server-side as it is completed. The
-**written answers and CV are collected at the very end**, and only from applicants who score at least
-the pass mark (**7**, `PASS_MARK`). The motivation and expectations are mandatory, and the CV must be 
-a PDF (max 2 pages, 5MB).
+The journey has **eight steps**, and every one after the first is persisted server-side as it is
+completed. The **written answers and CV are collected at the very end**, and only from applicants who
+score at least the pass mark (**8** of the 14 drawn, `PASS_MARK`). The motivation and expectations are
+mandatory, and the CV must be a PDF (max 2 pages, 5MB).
 
 ```
+Step 0  GET  /config/                                    -> preparation screen: limits, deadline, countries
 Step 1  POST /applications/                              -> create the applicant (details only)
 Step 2  POST /applications/{id}/eligibility/             -> four practical questions; may END the journey
 Step 3  POST /applications/{id}/experience/              -> experience and plans (8 answers)
@@ -80,6 +81,38 @@ separately.
 
 ---
 
+### Step 0 — Before you begin
+
+`GET /api/config/` — no auth, no application id. Fetch it **before rendering anything**; it holds the
+copy and limits that must match what the API enforces:
+
+```json
+{
+  "contact_email": "cmyalla@ihi.or.tz",
+  "deadline": "Friday 28 August 2026",
+  "duration": "about 15 minutes",
+  "funding_gate": true,
+  "limits": { "cv_max_mb": 5.0, "cv_max_pages": 2, "max_words": 300 },
+  "quiz": { "questions": 14, "bank_size": 24, "seconds_min": 25, "seconds_max": 25, "pass_mark": 8 },
+  "countries": [{ "label": "Tanzania and neighbours", "countries": ["Tanzania", "Kenya", "…"] },
+                { "label": "All countries", "countries": ["Afghanistan", "…"] }]
+}
+```
+
+Render a preparation screen listing what the applicant needs to have ready — a PDF CV within
+`cv_max_pages`/`cv_max_mb`, a dataset they analysed and 5–15 lines of their own R, their motivation
+within `max_words` — with **a tickbox per item** and the start button disabled until all are ticked.
+Word the tickboxes specifically ("My CV is a PDF, no more than 2 pages"): the point is to make people
+go and check the file, which "I have read the requirements" does not. Add a **Print this list**
+button; a meaningful share of applicants read this on a phone and draft their answers elsewhere.
+
+State the funding position here too, before anyone invests fifteen minutes: there is no travel,
+accommodation or subsistence support.
+
+Nothing is stored by this step — it exists to raise the quality of what you receive.
+
+---
+
 ### Step 1 — Submit the details form
 
 `POST /api/applications/` — send as `application/json` (or `multipart/form-data`; both are accepted).
@@ -93,9 +126,9 @@ submitted yet.
 | `first_name`           | text        |                                          |
 | `last_name`            | text        |                                          |
 | `email`                | email       | validated by the server                  |
-| `phone`                | text        |                                          |
-| `nationality`          | text        |                                          |
-| `country_of_residence` | text        |                                          |
+| `phone`                | text        | **must start with `+` and a country code** — 8–15 digits; spaces, hyphens and brackets are fine. A local `07…` number is rejected, because it cannot be dialled from abroad |
+| `nationality`          | text        | **dropdown** — one of `countries` from `GET /config/`; anything else is a 400 |
+| `country_of_residence` | text        | **dropdown**, same list. Free text produced three spellings of Tanzania in one export, and the panel's Tanzania-based floor matches on the stored string |
 | `gender`               | text        | use a dropdown on your side              |
 | `institution`          | text        |                                          |
 | `institution_type`     | text        | e.g. University / NGO / Government        |
@@ -192,7 +225,7 @@ Returns **403** if the applicant was ruled out at Step 2.
 {
   "session": "90adba6d-7418-452a-9b44-1298ff409270",
   "position": 0,
-  "total": 12,
+  "total": 14,
   "question": {
     "id": 5,
     "text": "A data frame d has 100 rows and two columns: district (10 unique values) and cases. How many rows does the result have?",
@@ -217,21 +250,50 @@ inside `question` — same value, provided in both places for convenience.)
 
 ### Step 5 (continued) — The timer, and answering questions
 
-**The clock is server-authoritative.** Each question carries a `deadline` (ISO timestamp). Render
-your countdown against that `deadline`, not a local `setTimeout` (they drift). The server allows
-`time_limit_seconds` + a 3s network grace.
+**The clock is server-authoritative.** Every question payload carries **`remaining_seconds`** — how
+much time is actually left, computed server-side and clamped to `0 … time_limit_seconds`. Count down
+from that.
+
+```js
+// Amount of time from the server; ticking from performance.now(), which is monotonic.
+const total = payload.remaining_seconds;            // already clamped to the limit
+const startedAt = performance.now();
+const left = () => Math.max(0, total - (performance.now() - startedAt) / 1000);
+```
+
+> **Do not compute the remainder from `deadline` and `Date.now()`.** That makes the applicant's device
+> clock part of the grading, and it fails silently in both directions: a phone a few minutes **fast**
+> reports a negative remainder on the first tick, so the page auto-submits a blank answer for every
+> question and the applicant scores zero with nothing on screen to explain it; a phone a few minutes
+> **slow** shows a long countdown and then has every answer discarded as late. `deadline` is still in
+> the payload for debugging and for older clients, but `remaining_seconds` is the field to render.
+
+Use a **monotonic** source for the ticking too (`performance.now()`, not `Date.now()`): it is
+unaffected by the system clock being corrected mid-question, and it stays accurate after a background
+tab has had its timers throttled or the laptop has slept — both of which are common on a phone.
 
 - The `question` object **never** contains the correct answer — don't look for it.
-- Re-fetching the current question does **not** reset the timer (safe on page reload).
-- Show `position + 1` of `total` as progress ("Question 1 of 12").
+- Re-fetching the current question does **not** reset the timer (safe on page reload) — the
+  `remaining_seconds` you get back is simply smaller.
+- Show `position + 1` of `total` as progress ("Question 1 of 14").
 - **`options` are shuffled per applicant** and frozen for the session. Render them in the order you
   receive them and submit the option *string* — never an index or letter, which mean nothing
   server-side.
 - **`code`** is an optional snippet (often R) to show under the question text. Render it in a
   monospaced block with whitespace preserved, using `textContent` rather than `innerHTML`. It is
   `""` for most questions.
-- **`time_limit_seconds` is per question** (25 by default) — read it rather than hard-coding, since
-  a long scenario question may be given more time.
+- **`time_limit_seconds` is per question** (25s for every question in the current bank) — read it
+  rather than hard-coding, since a single long question can be given more room.
+
+**When the clock reaches zero, submit whatever is selected — including nothing.**
+`{"answer": ""}` (or omitting the field) is a valid request: the server records the question as
+unanswered, and the response carries the **next** question with its own fresh clock, so the applicant
+moves on. Give that automatic submission a **retry and then a resync** (`GET /quiz/{id}/current/`) if
+the request fails: a single dropped POST at the moment the clock hits zero would otherwise leave the
+applicant on a dead screen with a stopped timer, and the quiz cannot be restarted.
+
+A manual submit is different — there is still time on the clock, so surface the error and let them
+press the button again rather than spending their remaining seconds on retries.
 
 `POST /api/quiz/{session_id}/answer/` — send JSON:
 
@@ -239,7 +301,7 @@ your countdown against that `deadline`, not a local `setTimeout` (they drift). T
 const res = await fetch(`${API}/quiz/${sessionId}/answer/`, {
   method: "POST",
   headers: { "Content-Type": "application/json" },
-  body: JSON.stringify({ answer: selectedOptionString }),  // must be one of the option strings
+  body: JSON.stringify({ answer: selectedOptionString }),  // an option string, or "" for no answer
 });
 const data = await res.json();
 ```
@@ -251,7 +313,8 @@ const data = await res.json();
   "timed_out": false,
   "accepted": true,
   "finished": false,
-  "next": { "session": "…", "position": 1, "total": 12, "question": { … }, "deadline": "…" },
+  "next": { "session": "…", "position": 1, "total": 14, "question": { … },
+            "remaining_seconds": 25.0, "time_limit_seconds": 25, "deadline": "…" },
   "result": null
 }
 ```
@@ -278,10 +341,10 @@ question, or the result object if the quiz is already done. Persist `session_id`
   "id": "90adba6d-…",
   "application": "f9ce179f-…",
   "score": 9,
-  "total": 12,
+  "total": 14,
   "completed_at": "2026-07-28T12:10:29.840Z",
   "passed": true,
-  "pass_mark": 7,
+  "pass_mark": 8,
   "final_submitted": false
 }
 ```
@@ -465,7 +528,7 @@ Django admin). Token auth does **not** require a CSRF header.
     { "id": "…", "first_name": "Ada", "last_name": "Lovelace", "email": "…",
       "institution": "…", "country_of_residence": "…", "created_at": "…",
       "status": "PASS", "decision": "PENDING", "quiz_status": "completed",
-      "score": 12, "total": 12 }
+      "score": 12, "total": 14 }
   ]
 }
 ```
@@ -540,7 +603,7 @@ await fetch(`${API}/admin/applications/bulk/`, {
 **Quiz breakdown** — `GET /api/admin/applications/{id}/quiz/`:
 ```json
 {
-  "session": "…", "score": 12, "total": 12, "completed_at": "…",
+  "session": "…", "score": 12, "total": 14, "completed_at": "…",
   "questions": [
     { "position": 0, "question_text": "…", "category": "R",
       "submitted_answer": "read.csv()", "correct_answer": "read.csv()",
@@ -560,6 +623,39 @@ Returns `404` if the applicant never started the quiz. (Exposes `correct_answer`
    Show the `status` badge with `score`/`total` and `pass_mark` next to it, so the outcome is
    self-explanatory. Add Select / Reject / Pending buttons (`PATCH`) and a Delete button (`DELETE`).
 4. **Quiz breakdown** (tab on the detail page) → `GET /admin/applications/{id}/quiz/`.
+5. **Shortlist** → `POST /admin/shortlist/` with the floors, then `POST /admin/shortlist/export/`.
+
+### The shortlist builder
+
+`GET`/`POST /api/admin/shortlist/` — ranks every application on the composite (recomputed
+server-side from the stored answers) and allocates seats. Body, all optional:
+
+| Field | Default | Meaning |
+|---|---|---|
+| `seats` | `25` | how many places there are |
+| `min_women` | `10` | floor, filled before the open seats |
+| `min_tanzania` | `12` | floor, matched on the stored country string |
+| `max_per_institution` | `3` | cap, applied to the seats (not to the waitlist) |
+| `waitlist` | `10` | how many reserves to mark |
+| `travel` | `"prefer"` | `prefer` \| `only` \| `ignore` — see the main README |
+| `drop_bluff` | `true` | exclude applicants who claimed an invented function |
+| `pool` | `"submitted"` | `submitted` \| `scored` \| `all` |
+
+Returns `{settings, floors, stats, rows}`. Every row carries `rank`, `shortlisted`, `waitlisted`, the
+score components and the `flags`; **render the whole ranking with the picks marked**, not just the
+picks — the applications a human most needs to read are the ones either side of the cut line.
+
+`floors` is what the status pills show (`women` / `women_required` / `women_met`, the same for
+Tanzania-based, plus `travel_unconfirmed`, `largest_institution` and the shortlist's median score). An
+unmeetable floor comes back `*_met: false` rather than being quietly fudged — show it in red.
+
+`stats.advice` is a sentence worth displaying verbatim: it warns when the median applicant is near the
+ceiling of the knowledge check, which means the questions have stopped discriminating and the ranking
+is being driven by the other components.
+
+`POST /api/admin/shortlist/export/` takes the same body plus `only_shortlist` and streams a CSV whose
+first three columns are `Rank`, `Shortlisted`, `Waitlisted`. **Reviewers only** (403 for viewers,
+who can still build a shortlist — it computes a ranking and records nothing).
 
 > Django's built-in admin at **`/admin/`** also exists (superuser login) and shows the `decision`
 > column/filter — a ready-made fallback UI.
@@ -591,6 +687,7 @@ For ready-to-run request examples (Thunder Client), see `README_API_TESTING.md` 
 
 | Method | Path                                          | Body                   | Auth            | Purpose                          |
 |--------|-----------------------------------------------|------------------------|-----------------|----------------------------------|
+| GET    | `/api/config/`                                | —                      | —               | Deadline, limits, countries, quiz shape |
 | POST   | `/api/applications/`                          | JSON (details only)    | —               | Create applicant — no CV/free text |
 | GET    | `/api/applications/{id}/status/`              | —                      | —               | Resume state (404 = stale id)     |
 | POST   | `/api/applications/{id}/eligibility/`         | JSON (4 answers)       | —               | Step 2 — may end the journey      |
@@ -612,5 +709,7 @@ For ready-to-run request examples (Thunder Client), see `README_API_TESTING.md` 
 | PATCH  | `/api/admin/applications/{id}/`               | `{"decision": ""}`     | Token           | Set decision                      |
 | DELETE | `/api/admin/applications/{id}/`               | —                      | Token           | Delete applicant                  |
 | GET    | `/api/admin/applications/{id}/quiz/`          | —                      | Token           | Per-question breakdown            |
+| GET/POST | `/api/admin/shortlist/`                     | JSON (floors)          | Token           | Ranking + seat allocation         |
+| POST   | `/api/admin/shortlist/export/`                | JSON (floors)          | Token (reviewer) | CSV with Rank/Shortlisted/Waitlisted |
 
 Admin endpoints require the `Authorization: Token <token>` header — see [section 4](#4-the-custom-admin-panel).

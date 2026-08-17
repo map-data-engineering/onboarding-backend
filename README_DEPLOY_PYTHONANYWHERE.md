@@ -524,7 +524,7 @@ The pass mark is a constant in the code, not an environment variable:
 
 ```python
 # application/models.py
-PASS_MARK = 7        # out of 12 seeded questions
+PASS_MARK = 8        # out of the 14 questions drawn per applicant
 ```
 
 To change it, edit that line, `git pull` on the server, and **Reload**. No migration is needed.

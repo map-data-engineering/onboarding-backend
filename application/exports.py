@@ -7,7 +7,16 @@ from django.utils import timezone
 from . import assessment
 from .models import PASS_MARK
 
-COLUMNS = [
+# The first three are blank in the plain applicant export and filled in by the
+# shortlist export, which passes an overlay keyed by application id. Keeping one
+# column set means the two files open the same way in a spreadsheet.
+SHORTLIST_COLUMNS = [
+    ("rank", "Rank"),
+    ("shortlisted", "Shortlisted"),
+    ("waitlisted", "Waitlisted"),
+]
+
+COLUMNS = SHORTLIST_COLUMNS + [
     ("id", "ID"),
     ("first_name", "First name"),
     ("last_name", "Last name"),
@@ -90,7 +99,7 @@ def _sanitize(value):
     return text
 
 
-def _row(application, request):
+def _row(application, request, shortlist=None):
     quiz = getattr(application, "quiz", None)
     cv_url = ""
     if application.cv:
@@ -100,7 +109,12 @@ def _row(application, request):
     scored = assessment.compute_score(application)
     claims = assessment.claim_summary(application.claims)
 
+    placing = (shortlist or {}).get(application.pk, {})
+
     values = {
+        "rank": placing.get("rank", ""),
+        "shortlisted": placing.get("shortlisted", ""),
+        "waitlisted": placing.get("waitlisted", ""),
         "id": application.pk,
         "first_name": application.first_name,
         "last_name": application.last_name,
@@ -160,23 +174,31 @@ def _row(application, request):
     return [_sanitize(values[key]) for key, _ in COLUMNS]
 
 
-def applications_csv_response(queryset, request=None, filename=None):
+def applications_csv_response(queryset, request=None, filename=None, shortlist=None):
     """
     Stream `queryset` as a CSV download.
 
     Streaming (rather than building one big string) keeps memory flat regardless
     of how many applicants match, and lets the browser start the download
     immediately.
+
+    `queryset` may also be an ordinary list: the shortlist export has already
+    ranked its applications in memory and the file must keep that order, which a
+    re-query would not preserve. `shortlist` is the {id: {rank, shortlisted,
+    waitlisted}} overlay for those columns.
     """
     writer = csv.writer(_Echo())
+    # A queryset streams; a list is already resident, and calling .iterator() on
+    # one would raise.
+    source = queryset.iterator() if hasattr(queryset, "iterator") else queryset
 
     def rows():
         # UTF-8 BOM so Excel detects the encoding and renders accented names
         # correctly instead of mojibake.
         yield "﻿"
         yield writer.writerow([label for _, label in COLUMNS])
-        for application in queryset.iterator():
-            yield writer.writerow(_row(application, request))
+        for application in source:
+            yield writer.writerow(_row(application, request, shortlist))
 
     stamp = timezone.localtime().strftime("%Y%m%d-%H%M")
     name = filename or f"applicants-{stamp}.csv"

@@ -93,6 +93,48 @@ def _page_count(uploaded):
             pass
 
 
+# --- Phone -------------------------------------------------------------------
+# Spaces, hyphens, brackets and dots are all fine to type; they are stripped
+# before counting digits. ITU E.164 allows up to 15 digits including the country
+# code, and no real number is shorter than 7 after it.
+_PHONE_PUNCTUATION = re.compile(r"[\s\-().]")
+PHONE_MIN_DIGITS = 8
+PHONE_MAX_DIGITS = 15
+
+
+def validate_phone(value):
+    """
+    A number we can actually dial from outside the applicant's country.
+
+    The leading + is required, and the error says why rather than just refusing:
+    a local number like 0712345678 looks completely correct to the person typing
+    it, and the last round produced a list of shortlisted applicants whose
+    numbers could not be called from abroad.
+    """
+    raw = (value or "").strip()
+    if not raw:
+        raise ValidationError("Please give a phone number, including the country code.")
+
+    cleaned = _PHONE_PUNCTUATION.sub("", raw)
+    if not cleaned.startswith("+"):
+        raise ValidationError(
+            "Please start with + and your country code, e.g. +255 712 345 678. "
+            "A number beginning 0 cannot be dialled from outside your country."
+        )
+
+    digits = cleaned[1:]
+    if not digits.isdigit():
+        raise ValidationError(
+            "Use digits only after the country code (spaces, hyphens and brackets are fine)."
+        )
+    if not PHONE_MIN_DIGITS <= len(digits) <= PHONE_MAX_DIGITS:
+        raise ValidationError(
+            f"That is {len(digits)} digits after the +. A full international number "
+            f"has between {PHONE_MIN_DIGITS} and {PHONE_MAX_DIGITS}."
+        )
+    return raw
+
+
 # --- Free text ---------------------------------------------------------------
 MAX_WORDS = 300
 

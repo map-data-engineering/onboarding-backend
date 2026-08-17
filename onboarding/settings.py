@@ -192,6 +192,37 @@ if not DEBUG:
     CSRF_COOKIE_SECURE = True
 
 
+# --- Portal copy and selection rules -----------------------------------------
+# The handful of values that change between rounds of applications. They are read
+# here rather than hardcoded in a template or in JavaScript because the applicant
+# page, the API and the panel all need to agree on them -- notably FUNDING_GATE,
+# which decides whether an applicant who cannot fund their own travel is stopped
+# at the eligibility step or allowed through flagged UNFUNDED.
+PORTAL = {
+    "CONTACT_EMAIL": os.environ.get("PORTAL_CONTACT_EMAIL", "cmyalla@ihi.or.tz"),
+    "DEADLINE": os.environ.get("PORTAL_DEADLINE", "Friday 28 August 2026"),
+    # Stated on the preparation screen. Set it honestly: a surprise timed section
+    # after someone budgeted five minutes is how you collect abandoned forms.
+    "DURATION": os.environ.get("PORTAL_DURATION", "about 15 minutes"),
+    # True  -> "I could not attend without financial support" ends the application
+    #          immediately, with an explanation.
+    # False -> they continue and are flagged UNFUNDED for the panel to judge
+    #          case by case. A hard gate excludes junior and lower-resourced
+    #          applicants disproportionately; decide deliberately, not by default.
+    "FUNDING_GATE": os.environ.get("PORTAL_FUNDING_GATE", "1") == "1",
+    # How many questions are drawn per category for each applicant. The bank holds
+    # more than this (see seed_questions), so no two applicants get the same set --
+    # 14 of 24 with options shuffled is tens of thousands of distinct papers, which
+    # is what stops answers circulating inside an institution.
+    "QUOTA": {
+        "R": 3,
+        "SPATIAL": 5,
+        "GENERAL": 3,
+        "BAYESIAN": 2,
+        "APPLICATION": 1,
+    },
+}
+
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": [
         "rest_framework.renderers.JSONRenderer",

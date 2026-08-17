@@ -4,6 +4,9 @@ from . import admin_views, views
 
 urlpatterns = [
     # ---- Applicant-facing (open) ----
+    # Deadline, limits, country lists and the shape of the knowledge check: read
+    # by the applicant page before it renders anything.
+    path("config/", views.portal_config),
     # Step 1: contact + profile (no CV yet)
     path("applications/", views.application_create),
     # Where the applicant is in the journey (used to resume after a reload)
@@ -28,6 +31,9 @@ urlpatterns = [
     # CSV of whatever ?search=/?status= currently select (reviewers only)
     path("admin/applications/export/", admin_views.admin_applications_export),
     path("admin/applications/bulk/", admin_views.admin_applications_bulk),
+    # Ranking + seat allocation under the diversity floors, and its own CSV
+    path("admin/shortlist/", admin_views.admin_shortlist),
+    path("admin/shortlist/export/", admin_views.admin_shortlist_export),
     path("admin/applications/<uuid:application_id>/", admin_views.admin_application_detail),
     path("admin/applications/<uuid:application_id>/quiz/", admin_views.admin_application_quiz),
     path("admin/applications/<uuid:application_id>/cv/", admin_views.admin_application_cv),

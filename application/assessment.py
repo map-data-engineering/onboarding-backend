@@ -9,6 +9,8 @@ stored record.
 
 import random
 
+from django.conf import settings
+
 from .models import PASS_MARK
 
 # --- Honesty check -----------------------------------------------------------
@@ -61,10 +63,26 @@ ELIGIBILITY_QUESTIONS = {
     ],
 }
 
-# Turn this off to let unfunded applicants apply anyway (they stay flagged).
-FUNDING_GATE = True
-
 NO_FUNDING_ANSWER = "I could not attend without financial support"
+
+# Advisory answers -- they raise a flag rather than ending the application.
+UNCONFIRMED_TRAVEL_ANSWER = "Likely covered, but not yet confirmed"
+
+
+def portal_setting(name):
+    """One value from settings.PORTAL, read at call time so tests can override it."""
+    return settings.PORTAL[name]
+
+
+def funding_gate():
+    """
+    Whether "could not attend without support" ends the application.
+
+    Read from settings on every call rather than captured at import: the gate is
+    the one selection rule most likely to be changed between rounds, and a module
+    constant would need a redeploy (and would ignore override_settings in tests).
+    """
+    return bool(portal_setting("FUNDING_GATE"))
 
 
 def eligibility_problem(answers):
@@ -84,7 +102,7 @@ def eligibility_problem(answers):
             "The course is built around participants' own spatial data, so we cannot "
             "consider applications from people who do not expect to work with it."
         )
-    if FUNDING_GATE and answers.get("elig_funding") == NO_FUNDING_ANSWER:
+    if funding_gate() and answers.get("elig_funding") == NO_FUNDING_ANSWER:
         return (
             "We have no funding for participant travel, accommodation or subsistence, "
             "and no way to create any. We would rather tell you plainly now than have "
@@ -223,7 +241,7 @@ def compute_flags(application):
 
     if application.elig_laptop and application.elig_laptop != "Yes":
         flags.append("NO-LAPTOP")
-    if application.elig_funding == "Likely covered, but not yet confirmed":
+    if application.elig_funding == UNCONFIRMED_TRAVEL_ANSWER:
         flags.append("TRAVEL-UNCONFIRMED")
     if application.elig_funding == NO_FUNDING_ANSWER:
         flags.append("UNFUNDED")

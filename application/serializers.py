@@ -1,8 +1,15 @@
 from rest_framework import serializers
 
-from . import assessment, validators
+from . import assessment, countries, validators
 from .models import Application, Question, QuizSession, SessionQuestion
-from .services import GRACE_SECONDS, PASS_MARK, _deadline, has_passed, options_for
+from .services import (
+    GRACE_SECONDS,
+    PASS_MARK,
+    _deadline,
+    has_passed,
+    options_for,
+    remaining_seconds,
+)
 
 
 class ApplicationSerializer(serializers.ModelSerializer):
@@ -14,10 +21,20 @@ class ApplicationSerializer(serializers.ModelSerializer):
     PASS_MARK on the quiz (see ApplicationFinalStepSerializer).
     """
 
+    # Both are dropdowns on the form; validating against the same list here is
+    # what keeps the export clean and the panel's Tanzania-based floor reliable,
+    # since it matches on the stored string.
+    country_of_residence = serializers.ChoiceField(choices=countries.ALL_COUNTRIES)
+    nationality = serializers.ChoiceField(choices=countries.ALL_COUNTRIES)
+
     class Meta:
         model = Application
         exclude = ["motivation", "expectations", "cv", "final_submitted_at"]
         read_only_fields = ["id", "created_at", "decision", "decision_at"]
+
+    def validate_phone(self, value):
+        """WhatsApp number, dialable internationally — see validators.validate_phone."""
+        return validators.validate_phone(value)
 
 
 def _choice_fields(questions):
@@ -123,10 +140,15 @@ class CurrentQuestionSerializer(serializers.Serializer):
     total = serializers.SerializerMethodField()
     question = serializers.SerializerMethodField()
     time_limit_seconds = serializers.IntegerField(source="question.time_limit_seconds")
+    # How long is actually left, computed server-side and clamped to
+    # 0..time_limit_seconds. This is what the countdown should run on: deriving it
+    # from `deadline` in the browser puts the applicant's device clock into the
+    # grading (see services.remaining_seconds).
+    remaining_seconds = serializers.SerializerMethodField()
     deadline = serializers.SerializerMethodField()
     # The slack built into `deadline` on top of time_limit_seconds. The client
     # counts down to the advertised limit and lets the grace cover the round
-    # trip, so an applicant told "25 seconds" doesn't watch a 28-second clock.
+    # trip, so an applicant told "40 seconds" doesn't watch a 43-second clock.
     grace_seconds = serializers.SerializerMethodField()
 
     def get_total(self, item):
@@ -142,14 +164,23 @@ class CurrentQuestionSerializer(serializers.Serializer):
     def get_grace_seconds(self, item):
         return GRACE_SECONDS
 
+    def get_remaining_seconds(self, item):
+        return remaining_seconds(item)
+
     def get_deadline(self, item):
-        # ISO timestamp the client renders a countdown against; the server still
-        # enforces it independently on submit.
+        # Kept for clients written against the older payload (and for debugging a
+        # session by hand). `remaining_seconds` is the field to render against.
         return _deadline(item).isoformat()
 
 
 class AnswerSerializer(serializers.Serializer):
-    answer = serializers.CharField()
+    # Blank is a legitimate submission: it is what the page sends when the clock
+    # reaches zero and no option was chosen. Rejecting it (the default for
+    # CharField) turned the automatic submission into a 400, which stopped the
+    # session advancing and left the applicant on a dead screen -- with no way
+    # back in, since the quiz cannot be restarted. An empty answer is recorded as
+    # unanswered by services.submit_answer.
+    answer = serializers.CharField(required=False, allow_blank=True, default="")
 
 
 class ResultSerializer(serializers.ModelSerializer):

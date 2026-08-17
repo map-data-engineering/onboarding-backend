@@ -6,9 +6,10 @@ const TOKEN = {
 };
 
 const views = {
-  login:  document.getElementById("view-login"),
-  list:   document.getElementById("view-list"),
-  detail: document.getElementById("view-detail"),
+  login:     document.getElementById("view-login"),
+  list:      document.getElementById("view-list"),
+  shortlist: document.getElementById("view-shortlist"),
+  detail:    document.getElementById("view-detail"),
 };
 
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
@@ -70,6 +71,10 @@ function setNavUser(user) {
   CAN_REVIEW = user.can_review !== false;
   hide(el("viewer-badge"), CAN_REVIEW);
   hide(el("export-csv"), user.can_export === false);
+  // Viewers can build a shortlist -- it computes a ranking, it records nothing --
+  // but the CSV of it is a bulk export, so it follows the same rule as the other.
+  hide(el("sl-csv"), user.can_export === false);
+  hide(el("sl-csv-short"), user.can_export === false);
   hide(el("select-all").closest("th"), !CAN_REVIEW);
   hide(el("decision-controls"), !CAN_REVIEW);
 }
@@ -225,23 +230,29 @@ el("status-filter").addEventListener("change", (e) => {
 });
 
 // A plain <a href> can't carry the Authorization header, so fetch the file and
-// hand the browser a blob. The query string mirrors the list, so the download
-// contains exactly the filtered rows -- not every applicant.
-el("export-csv").addEventListener("click", async (e) => {
-  const button = e.currentTarget;
+// hand the browser a blob. Shared by both exports.
+async function downloadCsv(path, { button, alert, body, fallback = "applicants.csv" }) {
   const label = button.textContent;
   button.disabled = true;
   button.innerHTML = `<span class="spin"></span>Exporting…`;
-  hide(listAlert, true);
+  hide(alert, true);
 
-  const params = new URLSearchParams();
-  if (currentSearch) params.set("search", currentSearch);
-  if (currentStatus) params.set("status", currentStatus);
-  const qs = params.toString() ? `?${params}` : "";
+  const headers = { Authorization: `Token ${TOKEN.get()}` };
+  if (body !== undefined) headers["Content-Type"] = "application/json";
+  // Django rejects an unsafe request from a staff member who also holds a session
+  // cookie unless it carries the CSRF token. csrfToken() is api.js's, so the two
+  // stay consistent about where the token is read from.
+  if (body !== undefined) {
+    const token = csrfToken();
+    if (token) headers["X-CSRFToken"] = token;
+  }
 
   try {
-    const res = await fetch(`${API}/admin/applications/export/${qs}`,
-                            { headers: { Authorization: `Token ${TOKEN.get()}` } });
+    const res = await fetch(`${API}${path}`, {
+      method: body === undefined ? "GET" : "POST",
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
     if (res.status === 401) { TOKEN.set(null); showView("login"); return; }
     if (!res.ok) throw new Error(`Export failed (${res.status})`);
 
@@ -249,19 +260,137 @@ el("export-csv").addEventListener("click", async (e) => {
     const match = disposition.match(/filename="?([^";]+)"?/);
     const url = URL.createObjectURL(await res.blob());
     const link = Object.assign(document.createElement("a"),
-                               { href: url, download: match ? match[1] : "applicants.csv" });
+                               { href: url, download: match ? match[1] : fallback });
     document.body.appendChild(link);
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
   } catch (err) {
-    listAlert.textContent = err.message || "Could not export applicants.";
-    hide(listAlert, false);
+    alert.textContent = err.message || "Could not export.";
+    hide(alert, false);
   } finally {
     button.disabled = false;
     button.textContent = label;
   }
+}
+
+// The query string mirrors the list, so the download contains exactly the
+// filtered rows -- not every applicant.
+el("export-csv").addEventListener("click", (e) => {
+  const params = new URLSearchParams();
+  if (currentSearch) params.set("search", currentSearch);
+  if (currentStatus) params.set("status", currentStatus);
+  const qs = params.toString() ? `?${params}` : "";
+  downloadCsv(`/admin/applications/export/${qs}`,
+              { button: e.currentTarget, alert: listAlert });
 });
+
+/* -------------------------------------------------------------- shortlist */
+// Ranking and seat allocation happen server-side (application/shortlist.py) from
+// the stored answers, so the panel and any other client agree on the order -- and
+// so a score computed in an applicant's browser is never part of it.
+const SL_ALERT = el("sl-alert");
+
+function shortlistOptions() {
+  return {
+    seats: +el("f_seats").value,
+    min_women: +el("f_women").value,
+    min_tanzania: +el("f_tz").value,
+    max_per_institution: +el("f_inst").value,
+    waitlist: +el("f_wait").value,
+    travel: el("f_travel").value,
+    drop_bluff: el("f_bluff").value === "1",
+    pool: el("f_pool").value,
+  };
+}
+
+async function buildShortlist() {
+  showView("shortlist");
+  hide(SL_ALERT, true);
+  el("sl-body").innerHTML = `<tr><td colspan="12" class="muted">Ranking…</td></tr>`;
+  try {
+    renderShortlist(await adminCall("POST", "/admin/shortlist/", shortlistOptions()));
+  } catch (err) {
+    if (err.status !== 401) {
+      el("sl-body").innerHTML = `<tr><td colspan="12" class="err">Could not build the shortlist.</td></tr>`;
+    }
+  }
+}
+
+function renderShortlist(data) {
+  const s = data.stats;
+  el("sl-stats").innerHTML = [
+    [s.applications, "in the pool"],
+    [s.median_score, "median score"],
+    [`${s.median_correct}/${s.questions || "—"}`, "median quiz"],
+    [s.bluff, "bluff flags"],
+    [s.with_code, "supplied real code"],
+    [s.women, "women"],
+    [s.tanzania, "Tanzania-based"],
+    [s.travel_unconfirmed, "travel unconfirmed"],
+  ].map(([value, label]) =>
+    `<div class="stat"><b>${esc(value)}</b><span>${label}</span></div>`).join("");
+
+  el("sl-advice").innerHTML = esc(s.advice);
+
+  const f = data.floors;
+  const pill = (text, state) => `<span class="pill${state ? ` ${state}` : ""}">${text}</span>`;
+  el("sl-floors").innerHTML =
+    pill(`Shortlisted: ${f.shortlisted} / ${f.seats} seats`, f.seats_filled ? "ok" : "miss") +
+    pill(`Women: ${f.women} / ${f.women_required} min`, f.women_met ? "ok" : "miss") +
+    pill(`Tanzania-based: ${f.tanzania} / ${f.tanzania_required} min`, f.tanzania_met ? "ok" : "miss") +
+    pill(`Travel unconfirmed: ${f.travel_unconfirmed}`, f.travel_unconfirmed === 0 ? "ok" : "") +
+    pill(`Waitlist: ${data.settings.waitlisted}`) +
+    pill(`Largest institution: ${esc(f.largest_institution)} (${f.largest_institution_count})`) +
+    pill(`Median score of the shortlist: ${f.median_score}`);
+
+  if (!data.rows.length) {
+    el("sl-body").innerHTML =
+      `<tr><td colspan="12" class="muted">No applications in this pool yet.</td></tr>`;
+    return;
+  }
+
+  el("sl-body").innerHTML = "";
+  data.rows.forEach((r) => {
+    const tr = document.createElement("tr");
+    tr.className = r.shortlisted ? "picked" : r.waitlisted ? "waiting" : "";
+    tr.innerHTML = `
+      <td>${r.rank}</td>
+      <td><strong>${esc(r.first_name)} ${esc(r.last_name)}</strong><br>
+          <span class="muted">${esc(r.email)}</span></td>
+      <td>${esc(r.institution || "")}</td>
+      <td>${esc(r.country_of_residence || "")}</td>
+      <td>${esc(r.gender || "")}</td>
+      <td><strong>${r.total}</strong></td>
+      <td>${r.knowledge} <span class="muted">(${r.correct}/${r.of})</span></td>
+      <td>${r.honesty}</td>
+      <td>${r.relevance}</td>
+      <td>${r.impact}</td>
+      <td>${r.shortlisted ? '<span class="tag tag-ok">Shortlist</span>'
+            : r.waitlisted ? '<span class="tag tag-warn">Waitlist</span>' : ""}</td>
+      <td>${(r.flags || []).map((flag) => `<span class="flag">${esc(flag)}</span>`).join("")}</td>`;
+    // Clicking a row opens the application: the point of the ranking is to decide
+    // whose written answers to read, so reading them is one click away.
+    tr.addEventListener("click", () => loadDetail(r.id));
+    el("sl-body").appendChild(tr);
+  });
+}
+
+el("go-shortlist").addEventListener("click", buildShortlist);
+el("shortlist-back").addEventListener("click", loadList);
+el("sl-build").addEventListener("click", buildShortlist);
+
+el("sl-csv").addEventListener("click", (e) =>
+  downloadCsv("/admin/shortlist/export/", {
+    button: e.currentTarget, alert: SL_ALERT, fallback: "shortlist.csv",
+    body: shortlistOptions(),
+  }));
+
+el("sl-csv-short").addEventListener("click", (e) =>
+  downloadCsv("/admin/shortlist/export/", {
+    button: e.currentTarget, alert: SL_ALERT, fallback: "shortlist.csv",
+    body: { ...shortlistOptions(), only_shortlist: true },
+  }));
 
 /* ----------------------------------------------------------------- detail */
 const PROFILE_FIELDS = [

@@ -27,6 +27,7 @@ from .admin_serializers import (
     ApplicationListSerializer,
     SessionQuestionBreakdownSerializer,
 )
+from . import shortlist as shortlisting
 from .cv_links import unsign_cv_link
 from .exports import applications_csv_response
 from .models import PASS_MARK, Application
@@ -182,6 +183,128 @@ def admin_applications_export(request):
         return Response(bad.payload, status=status.HTTP_400_BAD_REQUEST)
 
     return applications_csv_response(qs, request=request)
+
+
+def _shortlist_options(data):
+    """
+    Read the builder's controls off a request body, with the defaults filled in.
+
+    Anything unparseable falls back to its default rather than 400-ing: these come
+    from number inputs in the panel, and an empty box should mean "the default",
+    not "the shortlist you were looking at has gone".
+    """
+    options = {}
+    for name in ("seats", "min_women", "min_tanzania", "max_per_institution", "waitlist"):
+        try:
+            options[name] = int(data.get(name, shortlisting.DEFAULTS[name]))
+        except (TypeError, ValueError):
+            options[name] = shortlisting.DEFAULTS[name]
+
+    travel = data.get("travel", shortlisting.DEFAULTS["travel"])
+    options["travel"] = travel if travel in shortlisting.TRAVEL_MODES else shortlisting.DEFAULTS["travel"]
+
+    pool = data.get("pool", shortlisting.DEFAULTS["pool"])
+    options["pool"] = pool if pool in shortlisting.POOLS else shortlisting.DEFAULTS["pool"]
+
+    drop = data.get("drop_bluff", shortlisting.DEFAULTS["drop_bluff"])
+    options["drop_bluff"] = drop in (True, "true", "1", 1, "on")
+    return options
+
+
+def _shortlist_queryset():
+    """Every application, with the rows the score needs, ready to rank in memory."""
+    return (
+        Application.objects.select_related("quiz")
+        .prefetch_related("quiz__items__question")
+        .order_by("created_at")
+    )
+
+
+@api_view(["GET", "POST"])
+@permission_classes([IsStaff])
+def admin_shortlist(request):
+    """
+    Rank every application and allocate seats under the panel's floors.
+
+    Body (all optional -- see shortlist.DEFAULTS):
+      seats, min_women, min_tanzania, max_per_institution, waitlist : integers
+      travel : "prefer" | "only" | "ignore"
+      pool   : "submitted" | "scored" | "all"
+      drop_bluff : bool
+
+    GET returns the defaults applied to the current pool, so opening the panel
+    shows a shortlist rather than an empty form. Open to viewers: it computes a
+    ranking, it does not record a decision.
+    """
+    data = request.data if request.method == "POST" else request.query_params
+    options = _shortlist_options(data)
+    result = shortlisting.build_shortlist(_shortlist_queryset(), **options)
+
+    return Response(
+        {
+            "settings": result["settings"],
+            "floors": result["floors"],
+            "stats": result["stats"],
+            "rows": [
+                {
+                    "id": str(row["application"].pk),
+                    "rank": row["rank"],
+                    "shortlisted": row["shortlisted"],
+                    "waitlisted": row["waitlisted"],
+                    "first_name": row["application"].first_name,
+                    "last_name": row["application"].last_name,
+                    "email": row["application"].email,
+                    "institution": row["application"].institution,
+                    "country_of_residence": row["application"].country_of_residence,
+                    "gender": row["application"].gender,
+                    "decision": row["application"].decision,
+                    "total": row["score"]["total"],
+                    "knowledge": row["score"]["knowledge"],
+                    "honesty": row["score"]["honesty"],
+                    "relevance": row["score"]["relevance"],
+                    "impact": row["score"]["impact"],
+                    "correct": row["score"]["correct"],
+                    "of": row["score"]["of"],
+                    "flags": row["score"]["flags"],
+                }
+                for row in result["rows"]
+            ],
+        }
+    )
+
+
+@api_view(["POST"])
+@permission_classes([CanReviewApplicants])
+def admin_shortlist_export(request):
+    """
+    CSV of the ranking just built, with Rank, Shortlisted and Waitlisted columns.
+
+    Takes the same body as the builder plus `only_shortlist`, so the panel can
+    hand over either the full ranking or the picks alone. Reviewers only, like the
+    other export.
+    """
+    options = _shortlist_options(request.data)
+    result = shortlisting.build_shortlist(_shortlist_queryset(), **options)
+
+    rows = result["rows"]
+    if request.data.get("only_shortlist") in (True, "true", "1", 1, "on"):
+        rows = [row for row in rows if row["shortlisted"] or row["waitlisted"]]
+
+    overlay = {
+        row["application"].pk: {
+            "rank": row["rank"],
+            "shortlisted": "Yes" if row["shortlisted"] else "",
+            "waitlisted": "Yes" if row["waitlisted"] else "",
+        }
+        for row in rows
+    }
+    stamp = timezone.localtime().strftime("%Y%m%d-%H%M")
+    return applications_csv_response(
+        [row["application"] for row in rows],
+        request=request,
+        filename=f"shortlist-{stamp}.csv",
+        shortlist=overlay,
+    )
 
 
 @api_view(["GET", "PATCH", "DELETE"])

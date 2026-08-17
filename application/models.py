@@ -4,8 +4,12 @@ from django.db import models
 
 # Minimum score that counts as a pass: it unlocks the final step (motivation,
 # expectations, CV) and drives Application.status. An absolute count, not a
-# percentage -- revisit it if the number of seeded questions changes.
-PASS_MARK = 7
+# percentage -- revisit it if the size of the draw changes.
+#
+# 8 of the 14 questions drawn per applicant (settings.PORTAL["QUOTA"]), i.e. the
+# same 57% bar as the previous 7-of-12 paper. Because status is derived on read,
+# changing this re-grades everyone, including applications already submitted.
+PASS_MARK = 8
 
 
 class Question(models.Model):
