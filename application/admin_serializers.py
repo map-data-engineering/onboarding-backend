@@ -3,6 +3,7 @@
 from rest_framework import serializers
 
 from .cv_links import sign_cv_link
+from . import assessment
 from .models import PASS_MARK, Application, SessionQuestion
 
 
@@ -14,6 +15,9 @@ class ApplicationListSerializer(serializers.ModelSerializer):
     total = serializers.SerializerMethodField()
     # PASS / FAIL / PENDING — derived from the score (see Application.status).
     status = serializers.CharField(read_only=True)
+    # Composite out of 100 and the review flags, so the table can be scanned.
+    composite = serializers.SerializerMethodField()
+    flags = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -26,11 +30,19 @@ class ApplicationListSerializer(serializers.ModelSerializer):
             "country_of_residence",
             "created_at",
             "status",
+            "composite",
+            "flags",
             "decision",
             "quiz_status",
             "score",
             "total",
         ]
+
+    def get_composite(self, application):
+        return assessment.compute_score(application)["total"]
+
+    def get_flags(self, application):
+        return assessment.compute_flags(application)
 
     def _quiz(self, application):
         # OneToOne related_name="quiz"; may not exist yet.
@@ -61,6 +73,8 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
     completed_at = serializers.SerializerMethodField()
     status = serializers.CharField(read_only=True)
     pass_mark = serializers.SerializerMethodField()
+    assessment = serializers.SerializerMethodField()
+    claim_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Application
@@ -79,6 +93,29 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
             "education",
             "r_experience",
             "bayesian_knowledge",
+            # Step 2-3: eligibility and experience
+            "elig_attend",
+            "elig_laptop",
+            "elig_data",
+            "elig_funding",
+            "ineligible_reason",
+            "exp_rfreq",
+            "exp_rself",
+            "exp_bayes",
+            "exp_glm",
+            "exp_dtype",
+            "exp_when",
+            "exp_share",
+            "exp_use",
+            # Step 4: honesty check
+            "claims",
+            "claim_summary",
+            # Step 6: their own work
+            "written_dataset",
+            "written_code",
+            "written_why_not_ols",
+            "written_other",
+            # Legacy free text from the original single-page form
             "motivation",
             "expectations",
             "cv",
@@ -86,6 +123,7 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
             "final_submitted_at",
             "status",
             "pass_mark",
+            "assessment",
             "decision",
             "decision_at",
             "quiz_status",
@@ -99,6 +137,18 @@ class ApplicationDetailSerializer(serializers.ModelSerializer):
 
     def get_pass_mark(self, application):
         return PASS_MARK
+
+    def get_assessment(self, application):
+        """Composite score components + review flags, recomputed on every read."""
+        return assessment.compute_score(application)
+
+    def get_claim_summary(self, application):
+        """How many real functions were claimed, and how many invented ones."""
+        summary = assessment.claim_summary(application.claims)
+        summary["real_total"] = len(assessment.CLAIM_REAL)
+        summary["fake_total"] = len(assessment.CLAIM_FAKE)
+        summary["fake_names"] = assessment.CLAIM_FAKE
+        return summary
 
     def get_cv(self, application):
         """

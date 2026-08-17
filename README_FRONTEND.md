@@ -47,24 +47,31 @@ const API = "/api";   // e.g. fetch(`${API}/applications/`)
 
 ## 2. The applicant flow (end to end)
 
-The intake is **two-stage, gated on the quiz score**. The first form collects contact/profile
-details only. The **motivation, expectations and CV are collected at the very end**, and only from
-applicants who score at least the pass mark (**7**, `services.PASS_MARK`).
-
-Order of API calls:
+The journey has **seven steps**, and every one is persisted server-side as it is completed. The
+**written answers and CV are collected at the very end**, and only from applicants who score at least
+the pass mark (**7**, `PASS_MARK`).
 
 ```
 Step 1  POST /applications/                              -> create the applicant (details only)
-Step 2  POST /applications/{application_id}/quiz/start/  -> begin the timed quiz, get question #1
-Step 3  (loop) POST /quiz/{session_id}/answer/           -> submit answer, receive next question
-Step 4  GET  /quiz/{session_id}/result/                  -> show final score + `passed`
-Step 5  POST /applications/{application_id}/finalize/    -> motivation + expectations + CV
+Step 2  POST /applications/{id}/eligibility/             -> four practical questions; may END the journey
+Step 3  POST /applications/{id}/experience/              -> experience and plans (8 answers)
+Step 4  GET  /applications/{id}/claims/                  -> the honesty-check function names
+        POST /applications/{id}/claims/                  -> their answers
+Step 5  POST /applications/{id}/quiz/start/              -> begin the timed check, get question #1
+        (loop) POST /quiz/{session_id}/answer/           -> submit answer, receive next question
+        GET  /quiz/{session_id}/result/                  -> final score + `passed`
+Step 6  POST /applications/{id}/finalize/                -> written answers + CV
         (only if `passed` is true — the server returns 403 otherwise)
+Step 7  (no call) confirmation screen
 ```
 
-Two IDs to keep in app state:
-- `application_id` — returned by Step 1. **Keep it until Step 5**, not just until the quiz starts.
-- `session_id` — returned by Step 2 (the field is named `session`). Used by every quiz call after.
+One ID to keep in app state: **`application_id`**, returned by Step 1 — you need it through Step 6.
+The `session_id` comes back from Step 5 and from `/status/`, so there's no need to persist it
+separately.
+
+> **Nothing is decided in the browser.** Which option strings are valid, which honesty-check names
+> are invented, whether an eligibility answer ends the journey, whether the final step is unlocked,
+> and the composite score are all computed server-side from the stored record.
 
 > **The gate is enforced server-side.** Hiding the final form in your UI is a convenience, not the
 > control. `POST /finalize/` independently checks that the quiz is finished and that
@@ -96,8 +103,8 @@ submitted yet.
 | `r_experience`         | text        | self-rated, e.g. Beginner/Intermediate   |
 | `bayesian_knowledge`   | text        | self-rated                               |
 
-> **Do not put `motivation`, `expectations` or `cv` on this form.** The endpoint ignores them
-> entirely — they belong to [Step 5](#step-5--final-submission-motivation-expectations-cv).
+> **Do not put the written answers or `cv` on this form.** The endpoint ignores them entirely —
+> they belong to [Step 6](#step-6--final-submission-their-own-work--cv).
 
 **Example:**
 
@@ -110,13 +117,13 @@ const res = await fetch(`${API}/applications/`, {
 
 if (res.status === 201) {
   const app = await res.json();
-  const applicationId = app.id;   // <-- save this; you need it again at Step 5
+  const applicationId = app.id;   // <-- save this; you need it through Step 6
 }
 ```
 
 **Success:** `201 Created` with the application JSON (`id`, `created_at`, and the staff-review fields
 `decision` (defaults to `"PENDING"`) and `decision_at` (`null`) — the applicant UI can ignore those
-two). `motivation`, `expectations` and `cv` are **not** in this response; they don't exist yet.
+two). The written answers and `cv` are **not** in this response; they don't exist yet.
 
 **Validation errors:** `400 Bad Request` with a field→messages map:
 
@@ -126,9 +133,57 @@ two). `motivation`, `expectations` and `cv` are **not** in this response; they d
 
 ---
 
-### Step 2 — Start the quiz
+### Step 2 — Eligibility
+
+`POST /api/applications/{application_id}/eligibility/` — JSON, all four required:
+
+| Field | Options |
+|-------|---------|
+| `elig_attend` | `Yes, all four days` · `Only part of the period` · `No` |
+| `elig_laptop` | `Yes` · `No` · `I am not sure` |
+| `elig_data` | `Yes, I work with it now` · `Not yet, but I expect to within six months` · `No` |
+| `elig_funding` | `My institution has agreed to cover it` · `I will cover it myself` · `Likely covered, but not yet confirmed` · `I could not attend without financial support` |
+
+Send the option strings **exactly**; anything else is a `400` on that field.
+
+```json
+{ "eligible": false, "reason": "We have no funding for participant travel …" }
+```
+
+**`eligible: false` ends the journey** — show `reason` and stop. The answer is stored, every later
+step returns 403, and `/status/` reports `ineligible_reason` so a reload doesn't resurrect them.
+Which answers rule someone out is a server-side rule (`assessment.eligibility_problem`), not
+something to reimplement in the client.
+
+---
+
+### Step 3 — Experience and plans
+
+`POST /api/applications/{application_id}/experience/` — JSON, all eight required:
+`exp_rfreq`, `exp_rself`, `exp_bayes`, `exp_glm`, `exp_dtype`, `exp_when`, `exp_share`, `exp_use`.
+Options are listed in `assessment.EXPERIENCE_QUESTIONS`; again, send the strings exactly.
+Returns `{"saved": true}`.
+
+---
+
+### Step 4 — Honesty check
+
+`GET /api/applications/{application_id}/claims/` → `{"functions": ["st_read", "raster_scale2", …]}`
+
+Render one row per name with three choices: `used`, `heard`, `no`. **Some of the names are
+invented** — that is what the step measures — but the API never says which, so nothing in the page
+source gives it away.
+
+`POST` back `{"claims": {"st_read": "used", "raster_scale2": "no", …}}`, covering **every** name
+returned by the GET; a partial map is a `400`. The response is just `{"saved": true}` — deliberately
+no feedback about which were fake, so answers can't circulate.
+
+---
+
+### Step 5 — Start the quiz
 
 `POST /api/applications/{application_id}/quiz/start/` — no body needed.
+Returns **403** if the applicant was ruled out at Step 2.
 
 **Success:** `201 Created` with the first question:
 
@@ -159,7 +214,7 @@ inside `question` — same value, provided in both places for convenience.)
 
 ---
 
-### Step 3 — The timer, and answering questions
+### Step 5 (continued) — The timer, and answering questions
 
 **The clock is server-authoritative.** Each question carries a `deadline` (ISO timestamp). Render
 your countdown against that `deadline`, not a local `setTimeout` (they drift). The server allows
@@ -213,7 +268,7 @@ question, or the result object if the quiz is already done. Persist `session_id`
 
 ---
 
-### Step 4 — Show the result
+### Step 5 (continued) — Show the result
 
 `GET /api/quiz/{session_id}/result/` (the same object also arrives as `result` on the final answer):
 
@@ -247,20 +302,24 @@ const unlocked = result.passed && !result.final_submitted;
 
 ---
 
-### Step 5 — Final submission (motivation, expectations, CV)
+### Step 6 — Final submission (their own work + CV)
 
 `POST /api/applications/{application_id}/finalize/` — send as `multipart/form-data`.
 
-| Field          | Type     | Notes                     |
-|----------------|----------|---------------------------|
-| `motivation`   | textarea | required, non-blank       |
-| `expectations` | textarea | required, non-blank       |
-| `cv`           | **file** | required — PDF/DOC upload |
+| Field                 | Type     | Notes                                        |
+|-----------------------|----------|----------------------------------------------|
+| `written_dataset`     | textarea | required — a dataset they analysed (≥25 chars) |
+| `written_code`        | textarea | required — 5–15 lines of their own R, or `none` |
+| `written_why_not_ols` | textarea | required — why OLS would be a poor choice (≥15 chars) |
+| `written_other`       | textarea | optional                                     |
+| `cv`                  | **file** | required — PDF/DOC upload                    |
 
 ```js
 const form = new FormData();
-form.append("motivation", motivationEl.value);
-form.append("expectations", expectationsEl.value);
+form.append("written_dataset", datasetEl.value);
+form.append("written_code", codeEl.value);
+form.append("written_why_not_ols", whyEl.value);
+form.append("written_other", otherEl.value);
 form.append("cv", fileInput.files[0]);
 
 const res = await fetch(`${API}/applications/${applicationId}/finalize/`, {
@@ -269,11 +328,15 @@ const res = await fetch(`${API}/applications/${applicationId}/finalize/`, {
 });
 ```
 
+Render `written_code` in a monospaced textarea — it is code, and staff read it as such. Whether real
+code was supplied is machine-checked and feeds both the composite score and the `NO-CODE` flag, so
+`none` is an honest answer rather than a disqualifying one.
+
 **Responses:**
 
 | Status | Meaning |
 |--------|---------|
-| `200` | Submitted. Body: `{ id, submitted_at, motivation, expectations, cv }`. Show the "application submitted" screen and clear the saved ids. |
+| `200` | Submitted. Body: `{ id, submitted_at, …the written fields…, cv }`. Show the "application submitted" screen and clear the saved id. |
 | `403` | The quiz isn't finished, or the score is below the pass mark. `{"detail": "…"}` |
 | `400` | Validation errors (field→messages), or `{"detail": "This application has already been submitted."}` |
 | `404` | Unknown `application_id` — clear stored state and send them back to Step 1. |
@@ -284,39 +347,61 @@ const res = await fetch(`${API}/applications/${applicationId}/finalize/`, {
 
 ### Resuming after a reload
 
-Persist `application_id` and `session_id` in `localStorage` — but **validate them with the server
-before resuming**, or a deleted/stale record leaves the user stranded on a screen they can't get out
-of.
+Persist only `application_id` in `localStorage` — and **validate it with the server before
+resuming**, or a deleted/stale record leaves the user stranded on a screen they can't get out of.
 
 `GET /api/applications/{application_id}/status/`:
 
 ```json
-{ "id": "f9ce179f-…", "final_submitted": false, "quiz": { …the result object above…, } }
+{
+  "id": "f9ce179f-…",
+  "final_submitted": false,
+  "ineligible_reason": "",
+  "completed": { "eligibility": true, "experience": true, "claims": false },
+  "quiz": null
+}
 ```
 
-`quiz` is `null` if the quiz hasn't been started. A **`404` means the stored id is stale** — clear
-`localStorage` and start over at Step 1. The shipped `applicant.js` boots like this:
+`completed` says which steps are already answered, so a reload picks up where the applicant left off
+instead of asking everything again. `quiz` is `null` until the check is started, and carries the
+session id once it is. A **`404` means the stored id is stale** — clear it and start over at Step 1.
+The shipped `applicant.js` boots like this:
 
 ```
 no application_id            -> details form
 GET /status/ 404             -> clear state, details form
+ineligible_reason            -> "thank you for your interest" screen
 final_submitted              -> "submitted" screen
-quiz === null                -> quiz intro
-quiz.completed_at            -> results screen (which may unlock Step 5)
-otherwise                    -> GET /quiz/{id}/current/ and render the current question
+quiz.completed_at            -> results screen (which may unlock Step 6)
+quiz in progress             -> GET /quiz/{id}/current/ and render the current question
+otherwise                    -> first step in `completed` that is still false
 ```
 
 ---
 
 ## 3. Suggested applicant-portal screens
 
-1. **Details form** → Step 1. Button reads **"Next"**. On success, store `application_id`, go to (2).
-2. **Quiz intro** ("25s per question, no going back") → button calls Step 2.
-3. **Quiz question** → renders one question + countdown + options; submit calls Step 3; auto-advances.
-4. **Results** → Step 4. Shows the score. If `passed && !final_submitted`, offer "Continue to final
-   step"; otherwise the journey ends here.
-5. **Final step** → the motivation/expectations/CV form. This is where the button says
-   **"Submit application"** → Step 5, then a confirmation screen.
+A step rail across the top (`1. Details … 7. Submit`) with the current step highlighted and completed
+ones marked — the shipped portal renders it from one `STEPS` array in `applicant.js`.
+
+1. **Details** → Step 1. Button reads **"Continue"**. On success store `application_id`.
+2. **Eligibility** → Step 2. If the response says `eligible: false`, replace the whole card with the
+   reason and clear the step rail — do not offer a way onwards.
+3. **Experience** → Step 3, grouped under three subheadings.
+4. **Honesty check** → Step 4, one row per function with three radios.
+5. **Quiz intro then questions** → Step 5. One question, countdown, shuffled options, auto-advance.
+6. **Results** → shows the score. If `passed && !final_submitted`, offer "Continue to your own work";
+   otherwise the journey ends here.
+7. **Your work** → the written answers + CV form. The button says **"Submit application"** → Step 6,
+   then the confirmation screen.
+
+### Styling
+
+The shipped pages use no CSS framework — one stylesheet, `static/css/styles.css`, holding the
+Malaria Atlas Project tile as custom properties (`--gold #EBBC40`, `--black #111010`, `--charcoal`,
+`--warm`, `--light`), Lato for headings and Nunito Sans for body text. Reuse those variables rather
+than hard-coding hex values, and note the comment at the top: `--warm #9E9C97` fails contrast for
+body text, so it is used only for rules, borders and dividers.
 
 Persist in `localStorage`: `application_id`, `session_id` — validate them via `/status/` on load
 (see [Resuming after a reload](#resuming-after-a-reload)).
@@ -505,6 +590,10 @@ For ready-to-run request examples (Thunder Client), see `README_API_TESTING.md` 
 |--------|-----------------------------------------------|------------------------|-----------------|----------------------------------|
 | POST   | `/api/applications/`                          | JSON (details only)    | —               | Create applicant — no CV/free text |
 | GET    | `/api/applications/{id}/status/`              | —                      | —               | Resume state (404 = stale id)     |
+| POST   | `/api/applications/{id}/eligibility/`         | JSON (4 answers)       | —               | Step 2 — may end the journey      |
+| POST   | `/api/applications/{id}/experience/`          | JSON (8 answers)       | —               | Step 3 — experience and plans     |
+| GET    | `/api/applications/{id}/claims/`              | —                      | —               | Step 4 — honesty-check names      |
+| POST   | `/api/applications/{id}/claims/`              | `{"claims": {…}}`      | —               | Step 4 — their answers            |
 | POST   | `/api/applications/{id}/quiz/start/`          | —                      | —               | Start quiz, get question #1       |
 | GET    | `/api/quiz/{session}/current/`                | —                      | —               | Current question (or result)      |
 | POST   | `/api/quiz/{session}/answer/`                 | `{"answer": ""}`       | —               | Submit answer, get next question  |

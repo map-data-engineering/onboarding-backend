@@ -8,6 +8,10 @@ urlpatterns = [
     path("applications/", views.application_create),
     # Where the applicant is in the journey (used to resume after a reload)
     path("applications/<uuid:application_id>/status/", views.application_status),
+    # Steps 2-4: eligibility gate, experience, honesty check
+    path("applications/<uuid:application_id>/eligibility/", views.application_eligibility),
+    path("applications/<uuid:application_id>/experience/", views.application_experience),
+    path("applications/<uuid:application_id>/claims/", views.application_claims),
     # Final step: motivation, expectations + CV — only if the quiz was passed
     path("applications/<uuid:application_id>/finalize/", views.application_finalize),
     # Begin the timed, shuffled quiz for that applicant

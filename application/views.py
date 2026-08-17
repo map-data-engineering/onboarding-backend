@@ -5,13 +5,15 @@ from rest_framework.decorators import api_view, parser_classes
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
-from . import services
+from . import assessment, services
 from .models import Application, QuizSession
 from .serializers import (
     AnswerSerializer,
     ApplicationFinalStepSerializer,
     ApplicationSerializer,
     CurrentQuestionSerializer,
+    EligibilitySerializer,
+    ExperienceSerializer,
     ResultSerializer,
 )
 
@@ -45,9 +47,100 @@ def application_status(request, application_id):
         {
             "id": str(application.id),
             "final_submitted": application.final_submitted_at is not None,
+            "ineligible_reason": application.ineligible_reason,
+            # Which steps are already answered, so a reload resumes in the right
+            # place instead of asking everything again.
+            "completed": {
+                "eligibility": bool(application.elig_attend),
+                "experience": bool(application.exp_rfreq),
+                "claims": bool(application.claims),
+            },
             "quiz": ResultSerializer(session).data if session else None,
         }
     )
+
+
+@api_view(["POST"])
+def application_eligibility(request, application_id):
+    """
+    Step 2 — four practical questions, answered before any real effort.
+
+    Enforced here rather than in the browser: an applicant who cannot attend, has
+    no spatial data, or needs funding we do not have is stopped now, and the
+    reason is stored so staff can see why the journey ended.
+    """
+    application = get_object_or_404(Application, pk=application_id)
+    serializer = EligibilitySerializer(application, data=request.data)
+    serializer.is_valid(raise_exception=True)
+    application = serializer.save()
+
+    problem = assessment.eligibility_problem(serializer.validated_data)
+    if problem:
+        application.ineligible_reason = problem
+        application.save(update_fields=["ineligible_reason"])
+        return Response({"eligible": False, "reason": problem})
+
+    if application.ineligible_reason:  # they changed an answer -- let them through
+        application.ineligible_reason = ""
+        application.save(update_fields=["ineligible_reason"])
+    return Response({"eligible": True, "reason": ""})
+
+
+@api_view(["POST"])
+def application_experience(request, application_id):
+    """Step 3 — experience, data and plans. All eight answers are required."""
+    application = get_object_or_404(Application, pk=application_id)
+    serializer = ExperienceSerializer(application, data=request.data)
+    serializer.is_valid(raise_exception=True)
+    serializer.save()
+    return Response({"saved": True})
+
+
+@api_view(["GET", "POST"])
+def application_claims(request, application_id):
+    """
+    Step 4 — the honesty check.
+
+    GET returns the function names to show, shuffled. Which of them are invented
+    is never sent to the client; the grading in assessment.py is the only place
+    that knows, so the answer can't be read out of the page source.
+    """
+    application = get_object_or_404(Application, pk=application_id)
+
+    if request.method == "GET":
+        return Response({"functions": assessment.claim_catalogue()})
+
+    claims = request.data.get("claims")
+    if not isinstance(claims, dict) or not claims:
+        return Response(
+            {"claims": ["Answer for every function."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    known = set(assessment.CLAIM_REAL) | set(assessment.CLAIM_FAKE)
+    unknown = set(claims) - known
+    if unknown:
+        return Response(
+            {"claims": [f"Unknown function(s): {', '.join(sorted(unknown))}."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    if set(claims) != known:
+        return Response(
+            {"claims": ["Answer for every function."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+    bad = {v for v in claims.values()} - set(assessment.CLAIM_CHOICES)
+    if bad:
+        return Response(
+            {"claims": [f"Each answer must be one of {list(assessment.CLAIM_CHOICES)}."]},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    application.claims = claims
+    application.save(update_fields=["claims"])
+    # Deliberately no feedback about which names were fake -- that would leak the
+    # answer to the next applicant from the same institution.
+    return Response({"saved": True})
 
 
 @api_view(["POST"])
@@ -102,6 +195,10 @@ def application_finalize(request, application_id):
 def quiz_start(request, application_id):
     """Create the shuffled session for an application and return the first question."""
     application = get_object_or_404(Application, pk=application_id)
+    if application.ineligible_reason:
+        return Response(
+            {"detail": application.ineligible_reason}, status=status.HTTP_403_FORBIDDEN
+        )
     session = services.build_session(application)
     item = services.current_item(session)
     return Response(

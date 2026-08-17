@@ -13,10 +13,20 @@ Bayesian statistics.
 
 ## Features
 
-- **Two-stage intake** — the first form collects contact/profile details only. The motivation,
-  expectations and CV upload are gated behind the quiz and are collected in a final step, unlocked
-  only for applicants scoring **7 or more** (`services.PASS_MARK`). The gate is enforced
-  server-side, not just hidden in the UI.
+- **Seven-step application** — Details → Eligibility → Experience → Honesty check → Knowledge check →
+  Your work → Submit. Every step is persisted as it is completed, so a reload resumes from the
+  record rather than from anything the browser remembers.
+- **Eligibility gate** — four practical questions (can you attend, laptop, spatial data, travel
+  funding) answered *before* any real effort. Someone who cannot take up a place is told immediately
+  rather than after fifteen minutes, and the reason is stored on the record.
+- **Honesty check** — a grid of R functions, four of which are invented. Claiming one costs more than
+  admitting you don't know it. Which names are fake is only ever known server-side, so it can't be
+  read out of the page source.
+- **Gated final step** — the written answers and CV upload are unlocked only for applicants scoring
+  **7 or more** (`PASS_MARK`). Enforced server-side, not just hidden in the UI.
+- **Composite score /100** — knowledge 45 + honesty 20 + relevance 20 + impact 15, plus review flags
+  (`BLUFF`, `NO-CODE`, `RUSHED`, `INCONSISTENT`, `UNFUNDED`, …). Derived on read, so it can never
+  drift from the answers.
 - **Timed quiz** — one question at a time. Both the question order **and the answer options** are
   shuffled per applicant and then frozen, so "the answer is B" is worthless to pass around. The
   25s-per-question deadline (plus a 3s network grace) is **server-authoritative**: the client can't
@@ -44,7 +54,8 @@ Bayesian statistics.
 - **Django REST Framework 3.17** (+ `authtoken` for the admin panel)
 - **MySQL** in production (PythonAnywhere), **SQLite** locally — selected by `DJANGO_DB_ENGINE`, no
   code change between the two
-- Vanilla HTML/CSS/JS templates (no frontend build step)
+- Vanilla HTML/CSS/JS templates (no frontend build step, no CSS framework) styled in the Malaria
+  Atlas Project tile: gold `#EBBC40` / black `#111010`, Lato headings, Nunito Sans body
 
 ---
 
@@ -63,6 +74,7 @@ onboarding/
 │   ├── wsgi.py / asgi.py
 ├── application/                   # the app
 │   ├── models.py                  # Question, Application (+ PASS_MARK, status), QuizSession, SessionQuestion
+│   ├── assessment.py              # eligibility rules, honesty check, composite score + flags
 │   ├── services.py                # server-authoritative quiz logic (shuffle, timing, grading)
 │   ├── views.py                   # applicant-facing API (function-based views)
 │   ├── admin_views.py             # staff-only admin API
@@ -141,11 +153,14 @@ All endpoints live under `/api/`.
 |--------|------|---------|
 | POST | `/api/applications/` | Create applicant — contact + profile only |
 | GET | `/api/applications/{id}/status/` | Where the applicant is in the journey (client resume; 404 = stale id) |
+| POST | `/api/applications/{id}/eligibility/` | Step 2 — returns `{eligible, reason}`; a `false` ends the journey |
+| POST | `/api/applications/{id}/experience/` | Step 3 — experience and plans |
+| GET/POST | `/api/applications/{id}/claims/` | Step 4 — honesty check (GET returns the shuffled function names) |
 | POST | `/api/applications/{id}/quiz/start/` | Start the shuffled quiz |
 | GET | `/api/quiz/{session}/current/` | Current question (or result) |
 | POST | `/api/quiz/{session}/answer/` | Submit an answer, get the next |
 | GET | `/api/quiz/{session}/result/` | Final score (+ `passed`, `pass_mark`) |
-| POST | `/api/applications/{id}/finalize/` | Final submission: motivation, expectations + CV (multipart). **403** unless the quiz is complete with a score ≥ `pass_mark` |
+| POST | `/api/applications/{id}/finalize/` | Step 6: written answers + CV (multipart). **403** unless the quiz is complete with a score ≥ `pass_mark` |
 
 **Admin panel (staff-only, `Authorization: Token <token>`):**
 

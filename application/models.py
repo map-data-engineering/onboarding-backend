@@ -71,7 +71,40 @@ class Application(models.Model):
     r_experience = models.CharField(max_length=30)
     bayesian_knowledge = models.CharField(max_length=30)
 
-    # Free text — collected in the final step, only for applicants who pass the quiz.
+    # --- Step 2: eligibility ------------------------------------------------
+    # Practical questions answered before any effort is invested, so someone who
+    # cannot take up a place is told immediately rather than after 15 minutes.
+    elig_attend = models.CharField(max_length=60, blank=True)
+    elig_laptop = models.CharField(max_length=60, blank=True)
+    elig_data = models.CharField(max_length=80, blank=True)
+    elig_funding = models.CharField(max_length=80, blank=True)
+    # Set when the eligibility answers rule the applicant out; the journey stops.
+    ineligible_reason = models.CharField(max_length=200, blank=True)
+
+    # --- Step 3: experience and plans ---------------------------------------
+    exp_rfreq = models.CharField(max_length=60, blank=True)
+    exp_rself = models.CharField(max_length=80, blank=True)
+    exp_bayes = models.CharField(max_length=30, blank=True)
+    exp_glm = models.CharField(max_length=40, blank=True)
+    exp_dtype = models.CharField(max_length=80, blank=True)
+    exp_when = models.CharField(max_length=80, blank=True)
+    exp_share = models.CharField(max_length=60, blank=True)
+    exp_use = models.CharField(max_length=30, blank=True)
+
+    # --- Step 4: honesty check ----------------------------------------------
+    # {"st_read": "used", "st_reproject": "heard", ...}. Some of the function
+    # names offered are invented; claiming one is what this step measures.
+    claims = models.JSONField(default=dict, blank=True)
+
+    # --- Step 6: the applicant's own work -----------------------------------
+    # Collected in the final step, only from applicants who pass the quiz.
+    written_dataset = models.TextField(blank=True)      # a dataset they analysed
+    written_code = models.TextField(blank=True)         # 5-15 lines of their own R
+    written_why_not_ols = models.TextField(blank=True)  # why OLS would be a poor choice
+    written_other = models.TextField(blank=True)        # anything else for the panel
+
+    # Free text from the original single-page form. Kept so applications taken
+    # before the 7-step journey still read back in the panel and the CSV.
     motivation = models.TextField(blank=True)
     expectations = models.TextField(blank=True)
 

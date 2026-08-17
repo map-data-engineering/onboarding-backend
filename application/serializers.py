@@ -1,7 +1,8 @@
 from rest_framework import serializers
 
+from . import assessment
 from .models import Application, Question, QuizSession, SessionQuestion
-from .services import PASS_MARK, _deadline, has_passed, options_for
+from .services import GRACE_SECONDS, PASS_MARK, _deadline, has_passed, options_for
 
 
 class ApplicationSerializer(serializers.ModelSerializer):
@@ -19,25 +20,80 @@ class ApplicationSerializer(serializers.ModelSerializer):
         read_only_fields = ["id", "created_at", "decision", "decision_at"]
 
 
-class ApplicationFinalStepSerializer(serializers.ModelSerializer):
-    """Final step: the CV upload plus the two free-text answers."""
+def _choice_fields(questions):
+    """Build required ChoiceFields from an {field: [options]} map."""
+    return {
+        name: serializers.ChoiceField(choices=options, required=True, allow_blank=False)
+        for name, options in questions.items()
+    }
+
+
+class EligibilitySerializer(serializers.ModelSerializer):
+    """Step 2. Options are validated against the server's list, not the form's."""
 
     class Meta:
         model = Application
-        fields = ["motivation", "expectations", "cv"]
+        fields = list(assessment.ELIGIBILITY_QUESTIONS)
+
+    def get_fields(self):
+        return _choice_fields(assessment.ELIGIBILITY_QUESTIONS)
+
+
+class ExperienceSerializer(serializers.ModelSerializer):
+    """Step 3 — all eight answers required."""
+
+    class Meta:
+        model = Application
+        fields = list(assessment.EXPERIENCE_QUESTIONS)
+
+    def get_fields(self):
+        return _choice_fields(assessment.EXPERIENCE_QUESTIONS)
+
+
+class ApplicationFinalStepSerializer(serializers.ModelSerializer):
+    """Step 6 — the applicant's own work, plus the CV upload."""
+
+    class Meta:
+        model = Application
+        fields = [
+            "written_dataset",
+            "written_code",
+            "written_why_not_ols",
+            "written_other",
+            "cv",
+        ]
         extra_kwargs = {
             "cv": {"required": True, "allow_null": False},
-            "motivation": {"required": True, "allow_blank": False},
-            "expectations": {"required": True, "allow_blank": False},
+            "written_dataset": {"required": True, "allow_blank": False},
+            "written_code": {"required": True, "allow_blank": False},
+            "written_why_not_ols": {"required": True, "allow_blank": False},
+            "written_other": {"required": False, "allow_blank": True},
         }
+
+    # Minimums matching the prompts' "about 80 words" / "a sentence or two", so a
+    # single character can't pass for an answer. Deliberately low: the panel
+    # judges quality, this only rejects blanks.
+    def validate_written_dataset(self, value):
+        if len(value.strip()) < 25:
+            raise serializers.ValidationError("Please describe the dataset in a sentence or two.")
+        return value
+
+    def validate_written_why_not_ols(self, value):
+        if len(value.strip()) < 15:
+            raise serializers.ValidationError("A sentence is enough, but please answer.")
+        return value
 
 
 class QuestionPublicSerializer(serializers.ModelSerializer):
     """What the applicant is allowed to see. Note: NO correct_answer."""
 
+    # "Spatial data" rather than "SPATIAL" -- the code is for filtering, not display.
+    category_label = serializers.CharField(source="get_category_display", read_only=True)
+
     class Meta:
         model = Question
-        fields = ["id", "text", "code", "category", "options", "time_limit_seconds"]
+        fields = ["id", "text", "code", "category", "category_label",
+                  "options", "time_limit_seconds"]
 
 
 class CurrentQuestionSerializer(serializers.Serializer):
@@ -49,6 +105,10 @@ class CurrentQuestionSerializer(serializers.Serializer):
     question = serializers.SerializerMethodField()
     time_limit_seconds = serializers.IntegerField(source="question.time_limit_seconds")
     deadline = serializers.SerializerMethodField()
+    # The slack built into `deadline` on top of time_limit_seconds. The client
+    # counts down to the advertised limit and lets the grace cover the round
+    # trip, so an applicant told "25 seconds" doesn't watch a 28-second clock.
+    grace_seconds = serializers.SerializerMethodField()
 
     def get_total(self, item):
         return item.session.total
@@ -59,6 +119,9 @@ class CurrentQuestionSerializer(serializers.Serializer):
         data = QuestionPublicSerializer(item.question).data
         data["options"] = options_for(item)
         return data
+
+    def get_grace_seconds(self, item):
+        return GRACE_SECONDS
 
     def get_deadline(self, item):
         # ISO timestamp the client renders a countdown against; the server still

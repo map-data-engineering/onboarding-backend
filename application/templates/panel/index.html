@@ -1,154 +1,132 @@
 {% extends "base.html" %}
 {% load static assets %}
-{% block title %}Staff Panel — Onboarding{% endblock %}
+{% block title %}Staff Panel — Application Portal{% endblock %}
 
 {% block body %}
-<nav class="navbar navbar-expand-lg bg-dark navbar-dark shadow-sm">
-  <div class="container">
-    <span class="navbar-brand fw-semibold"><i class="bi bi-shield-lock-fill"></i> Staff Panel</span>
-    <div class="d-flex align-items-center gap-3 d-none" id="nav-user">
-      <span class="text-white-50 small" id="nav-username"></span>
-      <button class="btn btn-sm btn-outline-light" id="logout-btn"><i class="bi bi-box-arrow-right"></i> Log out</button>
-    </div>
-  </div>
-</nav>
+<header class="site-header dark">
+  <span class="brand">Staff Panel</span>
+  <span class="sub">Applicant review</span>
+  <span class="spacer"></span>
+  <span class="sub hidden" id="nav-username"></span>
+  <button class="btn btn-ghost btn-sm hidden" id="logout-btn">Log out</button>
+</header>
 
-<div class="panel-shell">
+<div class="wrap-wide">
 
   <!-- ============ LOGIN ============ -->
-  <section id="view-login" class="d-none">
-    <div class="row justify-content-center">
-      <div class="col-md-5">
-        <div class="card shadow-sm mt-5">
-          <div class="card-body p-4">
-            <h4 class="mb-3">Staff sign in</h4>
-            <div class="alert alert-danger d-none" id="login-alert"></div>
-            <form id="login-form">
-              <div class="mb-3">
-                <label class="form-label">Username</label>
-                <input class="form-control" name="username" required autocomplete="username">
-              </div>
-              <div class="mb-3">
-                <label class="form-label">Password</label>
-                <input type="password" class="form-control" name="password" required autocomplete="current-password">
-              </div>
-              <div class="d-grid">
-                <button class="btn btn-dark" type="submit" id="login-btn">Sign in</button>
-              </div>
-            </form>
-          </div>
+  <section id="view-login" class="hidden">
+    <div class="card" style="max-width:420px;margin:40px auto">
+      <h1>Staff sign in</h1>
+      <p class="lead">Use your staff account.</p>
+      <div class="err hidden" id="login-alert"></div>
+      <form id="login-form">
+        <label>Username</label>
+        <input type="text" name="username" autocomplete="username">
+        <label>Password</label>
+        <input type="password" name="password" autocomplete="current-password">
+        <div class="actions">
+          <button class="btn" type="submit" id="login-btn">Sign in</button>
         </div>
-      </div>
+      </form>
     </div>
   </section>
 
   <!-- ============ APPLICANTS LIST ============ -->
-  <section id="view-list" class="d-none">
-    <div class="d-flex justify-content-between align-items-center mb-3">
-      <h4 class="mb-0">Applicants <span class="badge bg-secondary align-middle d-none" id="viewer-badge">View only</span></h4>
-      <div class="d-flex gap-2">
-        <button class="btn btn-outline-success" id="export-csv" title="Download the filtered list as CSV">
-          <i class="bi bi-filetype-csv"></i> Export CSV
-        </button>
-        <select class="form-select" id="status-filter" style="max-width:180px" title="Knowledge-check outcome">
-          <option value="">All statuses</option>
-          <option value="pass">Pass</option>
-          <option value="fail">Fail</option>
-          <option value="pending">Pending</option>
-        </select>
-        <div class="input-group" style="max-width:340px">
-          <span class="input-group-text"><i class="bi bi-search"></i></span>
-          <input class="form-control" id="search-input" placeholder="Name, email or institution…">
-        </div>
-      </div>
+  <section id="view-list" class="hidden">
+    <h1>Applicants <span class="tag tag-mute hidden" id="viewer-badge">View only</span></h1>
+    <p class="lead" id="list-count"></p>
+
+    <div class="toolbar">
+      <input class="grow" type="text" id="search-input" placeholder="Name, email or institution…">
+      <select id="status-filter" style="max-width:190px">
+        <option value="">All statuses</option>
+        <option value="pass">Pass</option>
+        <option value="fail">Fail</option>
+        <option value="pending">Pending</option>
+      </select>
+      <button class="btn btn-ghost" id="export-csv">Export CSV</button>
     </div>
 
-    <div class="alert alert-danger d-none" id="list-alert"></div>
+    <div class="err hidden" id="list-alert"></div>
 
-    <!-- Bulk actions (shown when one or more rows are selected) -->
-    <div class="d-flex align-items-center gap-2 mb-3 d-none" id="bulk-bar">
-      <span class="fw-semibold me-1" id="bulk-count"></span>
-      <button class="btn btn-sm btn-success" data-bulk="select"><i class="bi bi-check2-circle"></i> Mark selected</button>
-      <button class="btn btn-sm btn-danger" data-bulk="reject"><i class="bi bi-x-circle"></i> Mark rejected</button>
-      <button class="btn btn-sm btn-outline-secondary" data-bulk="pending">Reset to pending</button>
-      <button class="btn btn-sm btn-outline-danger ms-auto" data-bulk="delete"><i class="bi bi-trash"></i> Delete</button>
+    <div class="toolbar hidden" id="bulk-bar">
+      <strong id="bulk-count"></strong>
+      <button class="btn btn-sm" data-bulk="select">Mark selected</button>
+      <button class="btn btn-sm btn-ghost" data-bulk="reject">Mark rejected</button>
+      <button class="btn btn-sm btn-ghost" data-bulk="pending">Reset to pending</button>
+      <button class="btn btn-sm btn-danger" data-bulk="delete">Delete</button>
     </div>
 
-    <div class="card shadow-sm">
-      <div class="table-responsive">
-        <table class="table table-hover align-middle mb-0">
-          <thead class="table-light">
-            <tr>
-              <th style="width:36px"><input type="checkbox" class="form-check-input" id="select-all" title="Select all"></th>
-              <th>Name</th><th>Email</th><th>Institution</th><th>Country</th>
-              <th>Quiz</th><th class="text-center">Score</th><th>Status</th><th>Decision</th><th></th>
-            </tr>
-          </thead>
-          <tbody id="applicants-body">
-            <tr><td colspan="10" class="text-center text-muted py-4">Loading…</td></tr>
-          </tbody>
-        </table>
-      </div>
+    <div class="table-wrap">
+      <table class="data">
+        <thead>
+          <tr>
+            <th style="width:34px"><input type="checkbox" id="select-all" title="Select all"></th>
+            <th>Name</th><th>Institution</th><th>Country</th>
+            <th>Quiz</th><th>Score</th><th>Composite</th><th>Status</th><th>Decision</th><th>Flags</th>
+          </tr>
+        </thead>
+        <tbody id="applicants-body">
+          <tr><td colspan="10" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
     </div>
 
-    <div class="d-flex justify-content-between align-items-center mt-3">
-      <span class="text-muted small" id="list-count"></span>
-      <div class="btn-group">
-        <button class="btn btn-outline-secondary btn-sm" id="prev-page" disabled><i class="bi bi-chevron-left"></i> Prev</button>
-        <button class="btn btn-outline-secondary btn-sm" id="next-page" disabled>Next <i class="bi bi-chevron-right"></i></button>
-      </div>
+    <div class="actions">
+      <button class="btn btn-ghost btn-sm" id="prev-page" disabled>&larr; Prev</button>
+      <button class="btn btn-ghost btn-sm" id="next-page" disabled>Next &rarr;</button>
     </div>
   </section>
 
   <!-- ============ APPLICANT DETAIL ============ -->
-  <section id="view-detail" class="d-none">
-    <button class="btn btn-link px-0 mb-3" id="back-to-list"><i class="bi bi-arrow-left"></i> Back to applicants</button>
+  <section id="view-detail" class="hidden">
+    <button class="btn btn-ghost btn-sm" id="back-to-list">&larr; Back to applicants</button>
 
-    <div class="d-flex justify-content-between align-items-start mb-3">
-      <div>
-        <h4 class="mb-0" id="d-name"></h4>
-        <span class="text-muted" id="d-email"></span>
+    <div class="card" style="margin-top:16px">
+      <h1 id="d-name"></h1>
+      <p class="lead" id="d-email"></p>
+
+      <div class="toolbar">
+        <span id="d-status"></span>
+        <span id="d-composite"></span>
+        <span class="spacer"></span>
+        <a class="btn btn-ghost btn-sm hidden" id="d-cv" target="_blank" rel="noopener">Download CV</a>
       </div>
-      <a class="btn btn-outline-primary d-none" id="d-cv" rel="noopener">
-        <i class="bi bi-file-earmark-arrow-down"></i> Download CV
-      </a>
-    </div>
+      <div id="d-flags"></div>
 
-    <!-- Decision controls -->
-    <div class="alert alert-danger d-none" id="detail-alert"></div>
-    <div class="d-flex align-items-center flex-wrap gap-2 mb-3">
-      <span class="text-muted">Knowledge check:</span>
-      <span id="d-status"></span>
-      <span class="text-muted ms-3">Decision:</span>
-      <span id="d-decision"></span>
-      <div class="btn-group btn-group-sm ms-1">
-        <button class="btn btn-outline-success" data-decision="select"><i class="bi bi-check2"></i> Select</button>
-        <button class="btn btn-outline-danger" data-decision="reject"><i class="bi bi-x"></i> Reject</button>
-        <button class="btn btn-outline-secondary" data-decision="pending">Pending</button>
+      <div class="err hidden" id="detail-alert"></div>
+
+      <div class="toolbar" id="decision-controls">
+        <span class="muted">Decision:</span>
+        <span id="d-decision"></span>
+        <button class="btn btn-sm" data-decision="select">Select</button>
+        <button class="btn btn-sm btn-ghost" data-decision="reject">Reject</button>
+        <button class="btn btn-sm btn-ghost" data-decision="pending">Pending</button>
+        <button class="btn btn-sm btn-danger" id="d-delete" style="margin-left:auto">Delete applicant</button>
       </div>
-      <button class="btn btn-sm btn-outline-danger ms-auto" id="d-delete">
-        <i class="bi bi-trash"></i> Delete applicant
-      </button>
     </div>
 
-    <ul class="nav nav-tabs mb-3" role="tablist">
-      <li class="nav-item"><button class="nav-link active" data-tab="profile">Profile</button></li>
-      <li class="nav-item"><button class="nav-link" data-tab="quiz">Quiz breakdown</button></li>
-    </ul>
+    <div class="card">
+      <ul class="tabs">
+        <li><button data-tab="profile" class="on">Profile</button></li>
+        <li><button data-tab="answers">Their answers</button></li>
+        <li><button data-tab="quiz">Quiz breakdown</button></li>
+      </ul>
 
-    <div id="tab-profile">
-      <div class="card shadow-sm"><div class="card-body">
-        <dl class="row mb-0" id="d-fields"></dl>
-      </div></div>
-    </div>
+      <div id="tab-profile">
+        <dl class="fields" id="d-fields"></dl>
+      </div>
 
-    <div id="tab-quiz" class="d-none">
-      <div id="quiz-summary" class="mb-3"></div>
-      <div class="card shadow-sm">
-        <div class="table-responsive">
-          <table class="table align-middle mb-0">
-            <thead class="table-light">
-              <tr><th>#</th><th>Question</th><th>Category</th><th>Submitted</th><th>Correct</th><th class="text-center">Result</th></tr>
+      <div id="tab-answers" class="hidden">
+        <div id="d-answers"></div>
+      </div>
+
+      <div id="tab-quiz" class="hidden">
+        <div id="quiz-summary"></div>
+        <div class="table-wrap" style="margin-top:12px">
+          <table class="data">
+            <thead>
+              <tr><th>#</th><th>Question</th><th>Category</th><th>Submitted</th><th>Correct</th><th>Result</th></tr>
             </thead>
             <tbody id="quiz-body"></tbody>
           </table>

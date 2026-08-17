@@ -1,8 +1,8 @@
-// Custom admin panel (README section 4). Token auth; token lives in
-// sessionStorage (not localStorage) to reduce XSS exposure.
+// Custom admin panel. Token auth; the token lives in sessionStorage (not
+// localStorage) to reduce XSS exposure.
 const TOKEN = {
-  get()   { return sessionStorage.getItem("admin_token"); },
-  set(v)  { v ? sessionStorage.setItem("admin_token", v) : sessionStorage.removeItem("admin_token"); },
+  get()  { return sessionStorage.getItem("admin_token"); },
+  set(v) { v ? sessionStorage.setItem("admin_token", v) : sessionStorage.removeItem("admin_token"); },
 };
 
 const views = {
@@ -10,11 +10,17 @@ const views = {
   list:   document.getElementById("view-list"),
   detail: document.getElementById("view-detail"),
 };
-const navUser = document.getElementById("nav-user");
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g,
+  (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+
+const el = (id) => document.getElementById(id);
+const hide = (node, condition) => node && node.classList.toggle("hidden", condition);
 
 function showView(name) {
-  Object.entries(views).forEach(([k, el]) => el.classList.toggle("d-none", k !== name));
-  navUser.classList.toggle("d-none", name === "login");
+  Object.entries(views).forEach(([k, node]) => hide(node, k !== name));
+  hide(el("nav-username"), name === "login");
+  hide(el("logout-btn"), name === "login");
 }
 
 // Any admin call that 401s means the token is bad -> back to login.
@@ -27,161 +33,136 @@ async function adminCall(method, path, body) {
   }
 }
 
-// ------------------------------------------------------------------ Login
-const loginForm = document.getElementById("login-form");
-const loginAlert = document.getElementById("login-alert");
+/* ------------------------------------------------------------------ login */
+const loginForm = el("login-form");
+const loginAlert = el("login-alert");
 
 loginForm.addEventListener("submit", async (e) => {
   e.preventDefault();
-  loginAlert.classList.add("d-none");
-  const btn = document.getElementById("login-btn");
-  btn.disabled = true;
-  const fd = new FormData(loginForm);
+  hide(loginAlert, true);
+  const button = el("login-btn");
+  button.disabled = true;
+  const data = new FormData(loginForm);
   try {
-    const data = await apiJson("POST", "/admin/login/", {
-      username: fd.get("username"),
-      password: fd.get("password"),
+    const res = await apiJson("POST", "/admin/login/", {
+      username: data.get("username"),
+      password: data.get("password"),
     });
-    TOKEN.set(data.token);
-    setNavUser(data.user);
+    TOKEN.set(res.token);
+    setNavUser(res.user);
     loginForm.reset();
     loadList();
   } catch (err) {
     loginAlert.textContent = (err.data && err.data.detail) || "Sign in failed.";
-    loginAlert.classList.remove("d-none");
+    hide(loginAlert, false);
   } finally {
-    btn.disabled = false;
+    button.disabled = false;
   }
 });
 
-// Capabilities of the signed-in staff account. Viewers get a read-only panel;
-// the server enforces the same rules, so this is purely about not showing
-// buttons that would come back 403.
+// Viewers get a read-only panel. The server enforces the same rules, so this is
+// purely about not showing buttons that would come back 403.
 let CAN_REVIEW = true;
 
 function setNavUser(user) {
-  const role = user.is_superuser ? " (superuser)" : user.role === "viewer" ? " (view only)" : "";
-  document.getElementById("nav-username").textContent = user.username + role;
-  applyCapabilities(user);
-}
-
-function applyCapabilities(user) {
+  const role = user.is_superuser ? " · superuser" : user.role === "viewer" ? " · view only" : "";
+  el("nav-username").textContent = user.username + role;
   CAN_REVIEW = user.can_review !== false;
-  const hide = (el, condition) => el && el.classList.toggle("d-none", condition);
-
-  hide(document.getElementById("viewer-badge"), CAN_REVIEW);
-  hide(document.getElementById("export-csv"), user.can_export === false);
-  // Select-all lives in the header; the per-row checkboxes are handled in
-  // renderList(), which runs each time the table is redrawn.
-  hide(document.getElementById("select-all").closest("th"), !CAN_REVIEW);
-  // The decision *badge* stays visible for viewers -- it's information. Only the
-  // controls that would change or delete the record go away.
-  hide(document.querySelector("#view-detail .btn-group"), !CAN_REVIEW);
-  hide(document.getElementById("d-delete"), !CAN_REVIEW);
+  hide(el("viewer-badge"), CAN_REVIEW);
+  hide(el("export-csv"), user.can_export === false);
+  hide(el("select-all").closest("th"), !CAN_REVIEW);
+  hide(el("decision-controls"), !CAN_REVIEW);
 }
 
-document.getElementById("logout-btn").addEventListener("click", async () => {
+el("logout-btn").addEventListener("click", async () => {
   try { await adminCall("POST", "/admin/logout/"); } catch { /* ignore */ }
   TOKEN.set(null);
   showView("login");
 });
 
-// ------------------------------------------------------------------ List
-let currentPage = 1;
-let currentSearch = "";
-let currentStatus = "";
-let pageState = { next: null, previous: null, count: 0 };
-
-const searchInput = document.getElementById("search-input");
-const statusFilter = document.getElementById("status-filter");
-const applicantsBody = document.getElementById("applicants-body");
-
-const QUIZ_BADGE = {
-  not_started: '<span class="badge bg-secondary">Not started</span>',
-  in_progress: '<span class="badge bg-warning text-dark">In progress</span>',
-  completed:   '<span class="badge bg-success">Completed</span>',
-};
-
-// Knowledge-check outcome, derived server-side from the score vs the pass mark.
-const STATUS_BADGE = {
-  PASS:    '<span class="badge bg-success">Pass</span>',
-  FAIL:    '<span class="badge bg-danger">Fail</span>',
-  PENDING: '<span class="badge bg-secondary">Pending</span>',
-};
-
-const DECISION_BADGE = {
-  PENDING:  '<span class="badge bg-secondary">Pending</span>',
-  SELECTED: '<span class="badge bg-success">Selected</span>',
-  REJECTED: '<span class="badge bg-danger">Rejected</span>',
-};
-
-// action name (UI) -> decision enum (API)
-const DECISION_VALUE = { select: "SELECTED", reject: "REJECTED", pending: "PENDING" };
-
-// Ids of applicants ticked in the current list view.
+/* ------------------------------------------------------------------- list */
+let currentPage = 1, currentSearch = "", currentStatus = "";
 const selected = new Set();
-const listAlert = document.getElementById("list-alert");
+
+const applicantsBody = el("applicants-body");
+const listAlert = el("list-alert");
+
+const STATUS_TAG = {
+  PASS:    '<span class="tag tag-ok">Pass</span>',
+  FAIL:    '<span class="tag tag-bad">Fail</span>',
+  PENDING: '<span class="tag tag-mute">Pending</span>',
+};
+const QUIZ_TAG = {
+  not_started: '<span class="tag tag-mute">Not started</span>',
+  in_progress: '<span class="tag tag-warn">In progress</span>',
+  completed:   '<span class="tag tag-dark">Completed</span>',
+};
+const DECISION_TAG = {
+  PENDING:  '<span class="tag tag-mute">Pending</span>',
+  SELECTED: '<span class="tag tag-ok">Selected</span>',
+  REJECTED: '<span class="tag tag-bad">Rejected</span>',
+};
+const DECISION_VALUE = { select: "SELECTED", reject: "REJECTED", pending: "PENDING" };
 
 async function loadList() {
   showView("list");
   selected.clear();
   updateBulkBar();
-  listAlert.classList.add("d-none");
-  document.getElementById("select-all").checked = false;
-  applicantsBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">Loading…</td></tr>`;
+  hide(listAlert, true);
+  el("select-all").checked = false;
+  applicantsBody.innerHTML = `<tr><td colspan="10" class="muted">Loading…</td></tr>`;
+
   const params = new URLSearchParams();
   if (currentSearch) params.set("search", currentSearch);
   if (currentStatus) params.set("status", currentStatus);
   if (currentPage > 1) params.set("page", currentPage);
   const qs = params.toString() ? `?${params}` : "";
+
   try {
     const data = await adminCall("GET", `/admin/applications/${qs}`);
-    pageState = { next: data.next, previous: data.previous, count: data.count };
     renderList(data.results);
-    updatePager();
+    el("list-count").textContent = `${data.count} applicant${data.count === 1 ? "" : "s"}`;
+    el("prev-page").disabled = !data.previous;
+    el("next-page").disabled = !data.next;
   } catch (err) {
     if (err.status !== 401) {
-      applicantsBody.innerHTML = `<tr><td colspan="10" class="text-center text-danger py-4">Failed to load applicants.</td></tr>`;
+      applicantsBody.innerHTML = `<tr><td colspan="10" class="err">Failed to load applicants.</td></tr>`;
     }
   }
 }
 
 function renderList(rows) {
   if (!rows.length) {
-    applicantsBody.innerHTML = `<tr><td colspan="10" class="text-center text-muted py-4">No applicants found.</td></tr>`;
+    applicantsBody.innerHTML = `<tr><td colspan="10" class="muted">No applicants found.</td></tr>`;
     return;
   }
   applicantsBody.innerHTML = "";
   rows.forEach((r) => {
     const tr = document.createElement("tr");
-    tr.className = "cursor-pointer";
-    const score = r.score != null ? `${r.score} / ${r.total}` : "—";
-    const decision = DECISION_BADGE[r.decision] || esc(r.decision || "");
     tr.innerHTML = `
-      <td class="select-cell${CAN_REVIEW ? "" : " d-none"}">${
-        CAN_REVIEW ? `<input type="checkbox" class="form-check-input row-check" value="${r.id}">` : ""
-      }</td>
-      <td class="fw-semibold">${esc(r.first_name)} ${esc(r.last_name)}</td>
-      <td>${esc(r.email)}</td>
+      <td class="select-cell${CAN_REVIEW ? "" : " hidden"}">${
+        CAN_REVIEW ? `<input type="checkbox" class="row-check" value="${r.id}">` : ""}</td>
+      <td><strong>${esc(r.first_name)} ${esc(r.last_name)}</strong><br>
+          <span class="muted">${esc(r.email)}</span></td>
       <td>${esc(r.institution || "")}</td>
       <td>${esc(r.country_of_residence || "")}</td>
-      <td>${QUIZ_BADGE[r.quiz_status] || esc(r.quiz_status)}</td>
-      <td class="text-center">${score}</td>
-      <td>${STATUS_BADGE[r.status] || esc(r.status || "")}</td>
-      <td>${decision}</td>
-      <td class="text-end"><i class="bi bi-chevron-right text-muted"></i></td>`;
+      <td>${QUIZ_TAG[r.quiz_status] || esc(r.quiz_status)}</td>
+      <td>${r.score != null ? `${r.score}/${r.total}` : "—"}</td>
+      <td><strong>${r.composite != null ? r.composite : "—"}</strong></td>
+      <td>${STATUS_TAG[r.status] || esc(r.status || "")}</td>
+      <td>${DECISION_TAG[r.decision] || esc(r.decision || "")}</td>
+      <td>${(r.flags || []).map((f) => `<span class="flag">${esc(f)}</span>`).join("")}</td>`;
 
-    // Clicking the row opens the detail, except when interacting with the checkbox.
+    // Clicking the row opens the detail, except when using the checkbox.
     tr.addEventListener("click", (e) => {
       if (e.target.closest(".select-cell")) return;
       loadDetail(r.id);
     });
 
-    const cb = tr.querySelector(".row-check");   // absent for view-only accounts
-    if (cb) {
-      cb.addEventListener("change", () => {
-        cb.checked ? selected.add(r.id) : selected.delete(r.id);
-        syncSelectAll();
+    const box = tr.querySelector(".row-check");   // absent for view-only accounts
+    if (box) {
+      box.addEventListener("change", () => {
+        box.checked ? selected.add(r.id) : selected.delete(r.id);
         updateBulkBar();
       });
     }
@@ -189,29 +170,21 @@ function renderList(rows) {
   });
 }
 
-// ---- Selection & bulk actions ----
 function updateBulkBar() {
-  const bar = document.getElementById("bulk-bar");
-  bar.classList.toggle("d-none", selected.size === 0);
-  document.getElementById("bulk-count").textContent = `${selected.size} selected`;
+  hide(el("bulk-bar"), selected.size === 0);
+  el("bulk-count").textContent = `${selected.size} selected`;
 }
 
-function syncSelectAll() {
-  const checks = [...document.querySelectorAll(".row-check")];
-  const all = checks.length > 0 && checks.every((c) => c.checked);
-  document.getElementById("select-all").checked = all;
-}
-
-document.getElementById("select-all").addEventListener("change", (e) => {
-  document.querySelectorAll(".row-check").forEach((cb) => {
-    cb.checked = e.target.checked;
-    cb.checked ? selected.add(cb.value) : selected.delete(cb.value);
+el("select-all").addEventListener("change", (e) => {
+  document.querySelectorAll(".row-check").forEach((box) => {
+    box.checked = e.target.checked;
+    box.checked ? selected.add(box.value) : selected.delete(box.value);
   });
   updateBulkBar();
 });
 
-document.querySelectorAll("[data-bulk]").forEach((btn) =>
-  btn.addEventListener("click", () => runBulk(btn.dataset.bulk)));
+document.querySelectorAll("[data-bulk]").forEach((button) =>
+  button.addEventListener("click", () => runBulk(button.dataset.bulk)));
 
 async function runBulk(action) {
   if (!selected.size) return;
@@ -220,83 +193,23 @@ async function runBulk(action) {
       !confirm(`Delete ${ids.length} applicant(s)? This also removes their CV and quiz, and cannot be undone.`)) {
     return;
   }
-  listAlert.classList.add("d-none");
+  hide(listAlert, true);
   try {
     await adminCall("POST", "/admin/applications/bulk/", { ids, action });
-    loadList();  // clears selection and re-renders with updated decisions
+    loadList();   // clears the selection and re-renders with updated decisions
   } catch (err) {
     if (err.status !== 401) {
       listAlert.textContent = (err.data && err.data.detail) || "Bulk action failed.";
-      listAlert.classList.remove("d-none");
+      hide(listAlert, false);
     }
   }
 }
 
-function updatePager() {
-  document.getElementById("list-count").textContent = `${pageState.count} applicant(s)`;
-  document.getElementById("prev-page").disabled = !pageState.previous;
-  document.getElementById("next-page").disabled = !pageState.next;
-}
+el("prev-page").addEventListener("click", () => { currentPage--; loadList(); });
+el("next-page").addEventListener("click", () => { currentPage++; loadList(); });
 
-document.getElementById("prev-page").addEventListener("click", () => { currentPage--; loadList(); });
-document.getElementById("next-page").addEventListener("click", () => { currentPage++; loadList(); });
-
-statusFilter.addEventListener("change", (e) => {
-  currentStatus = e.target.value;
-  currentPage = 1;
-  loadList();
-});
-
-// ---- CSV export ----
-// A plain <a href> can't carry the `Authorization: Token …` header, so fetch the
-// file and hand the browser a blob instead. The query string mirrors the list, so
-// the download contains exactly the rows currently filtered -- not every applicant.
-document.getElementById("export-csv").addEventListener("click", async (e) => {
-  const btn = e.currentTarget;
-  const original = btn.innerHTML;
-  btn.disabled = true;
-  btn.innerHTML = `<span class="spinner-border spinner-border-sm"></span> Exporting…`;
-  listAlert.classList.add("d-none");
-
-  const params = new URLSearchParams();
-  if (currentSearch) params.set("search", currentSearch);
-  if (currentStatus) params.set("status", currentStatus);
-  const qs = params.toString() ? `?${params}` : "";
-
-  try {
-    const res = await fetch(`${API}/admin/applications/export/${qs}`, {
-      headers: { Authorization: `Token ${TOKEN.get()}` },
-    });
-    if (res.status === 401) { TOKEN.set(null); showView("login"); return; }
-    if (!res.ok) throw new Error(`Export failed (${res.status})`);
-
-    // Honour the filename the server chose (applicants-<timestamp>.csv).
-    const disposition = res.headers.get("content-disposition") || "";
-    const match = disposition.match(/filename="?([^";]+)"?/);
-    const blob = await res.blob();
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = match ? match[1] : "applicants.csv";
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    // Revoking straight away can cancel the download before the browser has
-    // finished reading the blob (Firefox and Safari in particular). Let the
-    // download get under way first; the URL is released shortly after.
-    setTimeout(() => URL.revokeObjectURL(url), 30000);
-  } catch (err) {
-    listAlert.textContent = err.message || "Could not export applicants.";
-    listAlert.classList.remove("d-none");
-  } finally {
-    btn.disabled = false;
-    btn.innerHTML = original;
-  }
-});
-
-// Debounced search
 let searchTimer = null;
-searchInput.addEventListener("input", (e) => {
+el("search-input").addEventListener("input", (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     currentSearch = e.target.value.trim();
@@ -305,15 +218,83 @@ searchInput.addEventListener("input", (e) => {
   }, 300);
 });
 
-// ------------------------------------------------------------------ Detail
-const FIELD_LABELS = {
-  phone: "Phone", nationality: "Nationality", country_of_residence: "Country of residence",
-  gender: "Gender", institution: "Institution", institution_type: "Institution type",
-  role: "Role", education: "Education", r_experience: "R experience",
-  bayesian_knowledge: "Bayesian knowledge", motivation: "Motivation",
-  expectations: "Expectations", created_at: "Applied at",
-  final_submitted_at: "Final submission",
-};
+el("status-filter").addEventListener("change", (e) => {
+  currentStatus = e.target.value;
+  currentPage = 1;
+  loadList();
+});
+
+// A plain <a href> can't carry the Authorization header, so fetch the file and
+// hand the browser a blob. The query string mirrors the list, so the download
+// contains exactly the filtered rows -- not every applicant.
+el("export-csv").addEventListener("click", async (e) => {
+  const button = e.currentTarget;
+  const label = button.textContent;
+  button.disabled = true;
+  button.innerHTML = `<span class="spin"></span>Exporting…`;
+  hide(listAlert, true);
+
+  const params = new URLSearchParams();
+  if (currentSearch) params.set("search", currentSearch);
+  if (currentStatus) params.set("status", currentStatus);
+  const qs = params.toString() ? `?${params}` : "";
+
+  try {
+    const res = await fetch(`${API}/admin/applications/export/${qs}`,
+                            { headers: { Authorization: `Token ${TOKEN.get()}` } });
+    if (res.status === 401) { TOKEN.set(null); showView("login"); return; }
+    if (!res.ok) throw new Error(`Export failed (${res.status})`);
+
+    const disposition = res.headers.get("content-disposition") || "";
+    const match = disposition.match(/filename="?([^";]+)"?/);
+    const url = URL.createObjectURL(await res.blob());
+    const link = Object.assign(document.createElement("a"),
+                               { href: url, download: match ? match[1] : "applicants.csv" });
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  } catch (err) {
+    listAlert.textContent = err.message || "Could not export applicants.";
+    hide(listAlert, false);
+  } finally {
+    button.disabled = false;
+    button.textContent = label;
+  }
+});
+
+/* ----------------------------------------------------------------- detail */
+const PROFILE_FIELDS = [
+  ["phone", "Phone"], ["nationality", "Nationality"],
+  ["country_of_residence", "Country of residence"], ["gender", "Gender"],
+  ["institution", "Institution"], ["institution_type", "Institution type"],
+  ["role", "Role"], ["education", "Education"],
+  ["r_experience", "R experience (self-rated)"],
+  ["bayesian_knowledge", "Bayesian knowledge (self-rated)"],
+  ["created_at", "Applied at"], ["final_submitted_at", "Final submission"],
+  ["ineligible_reason", "Stopped because"],
+];
+
+const ELIGIBILITY_FIELDS = [
+  ["elig_attend", "Can attend all four days"], ["elig_laptop", "Will bring a laptop"],
+  ["elig_data", "Has spatial data"], ["elig_funding", "Travel funding"],
+];
+
+const EXPERIENCE_FIELDS = [
+  ["exp_rfreq", "Writes/runs R"], ["exp_rself", "Self-rated R skills"],
+  ["exp_bayes", "Bayesian familiarity"], ["exp_glm", "Fitted a GLM recently"],
+  ["exp_dtype", "Data type"], ["exp_when", "Would apply the methods"],
+  ["exp_share", "Would share internally"], ["exp_use", "Analyses used for decisions"],
+];
+
+const WRITTEN_FIELDS = [
+  ["written_dataset", "1. A dataset they analysed"],
+  ["written_code", "2. Their own R code"],
+  ["written_why_not_ols", "3. Why OLS would be a poor choice"],
+  ["written_other", "4. Anything else"],
+  ["motivation", "Motivation (legacy form)"],
+  ["expectations", "Expectations (legacy form)"],
+];
 
 let currentDetailId = null;
 
@@ -321,148 +302,169 @@ async function loadDetail(id) {
   showView("detail");
   switchTab("profile");
   currentDetailId = id;
-  document.getElementById("detail-alert").classList.add("d-none");
-  document.getElementById("d-fields").innerHTML = `<p class="text-muted">Loading…</p>`;
-  document.getElementById("quiz-body").innerHTML = "";
-  document.getElementById("quiz-summary").innerHTML = "";
+  hide(el("detail-alert"), true);
+  el("d-fields").innerHTML = `<dt class="muted">Loading…</dt><dd></dd>`;
+  el("quiz-body").innerHTML = "";
+  el("quiz-summary").innerHTML = "";
   try {
-    const a = await adminCall("GET", `/admin/applications/${id}/`);
-    renderDetail(a);
+    const applicant = await adminCall("GET", `/admin/applications/${id}/`);
+    renderDetail(applicant);
     loadQuizBreakdown(id);
   } catch (err) {
     if (err.status !== 401) {
-      document.getElementById("d-fields").innerHTML = `<p class="text-danger">Failed to load applicant.</p>`;
+      el("d-fields").innerHTML = `<dt class="err">Failed to load applicant.</dt><dd></dd>`;
     }
   }
+}
+
+const when = (value) => (value ? new Date(value).toLocaleString() : "");
+
+function definitionList(applicant, fields) {
+  return fields
+    .filter(([key]) => applicant[key])
+    .map(([key, label]) => {
+      const value = key.endsWith("_at") ? when(applicant[key]) : applicant[key];
+      return `<dt>${label}</dt><dd>${esc(value)}</dd>`;
+    }).join("");
 }
 
 function renderDetail(a) {
-  document.getElementById("d-name").textContent = `${a.first_name} ${a.last_name}`;
-  document.getElementById("d-email").textContent = a.email;
-  document.getElementById("d-decision").innerHTML =
-    DECISION_BADGE[a.decision] || esc(a.decision || "");
+  el("d-name").textContent = `${a.first_name} ${a.last_name}`;
+  el("d-email").textContent = a.email;
+  el("d-decision").innerHTML = DECISION_TAG[a.decision] || esc(a.decision || "");
 
-  // Pass/fail is derived from the score — show the threshold alongside it.
-  const statusEl = document.getElementById("d-status");
-  const badge = STATUS_BADGE[a.status] || esc(a.status || "");
-  statusEl.innerHTML = a.score != null
-    ? `${badge} <span class="text-muted small">${a.score}/${a.total}, pass mark ${a.pass_mark}</span>`
-    : badge;
+  const status = STATUS_TAG[a.status] || esc(a.status || "");
+  el("d-status").innerHTML = a.score != null
+    ? `${status} <span class="muted">${a.score}/${a.total}, pass mark ${a.pass_mark}</span>`
+    : status;
+
+  const s = a.assessment || {};
+  el("d-composite").innerHTML = s.total != null
+    ? `<span class="muted">Composite</span> <strong>${s.total}</strong><span class="muted">/100 —
+       knowledge ${s.knowledge}, honesty ${s.honesty}, relevance ${s.relevance}, impact ${s.impact}</span>`
+    : "";
+  el("d-flags").innerHTML = (s.flags || []).map((f) => `<span class="flag">${esc(f)}</span>`).join("");
 
   // `a.cv` carries a short-lived signature, so a plain link is enough -- no
   // header, no fetch. Same URL the standalone frontends use.
-  const cv = document.getElementById("d-cv");
-  if (a.cv) { cv.href = a.cv; cv.classList.remove("d-none"); }
-  else { cv.removeAttribute("href"); cv.classList.add("d-none"); }
+  const cv = el("d-cv");
+  if (a.cv) { cv.href = a.cv; hide(cv, false); }
+  else { cv.removeAttribute("href"); hide(cv, true); }
 
-  const dl = document.getElementById("d-fields");
-  dl.innerHTML = "";
-  Object.entries(FIELD_LABELS).forEach(([key, label]) => {
-    if (!(key in a)) return;
-    let val = a[key];
-    if ((key === "created_at" || key === "final_submitted_at") && val) {
-      val = new Date(val).toLocaleString();
-    }
-    if (key === "final_submitted_at" && !val) val = "Not submitted";
-    dl.insertAdjacentHTML("beforeend",
-      `<dt class="col-sm-3 text-muted">${label}</dt>
-       <dd class="col-sm-9">${val ? esc(String(val)) : "<span class='text-muted'>—</span>"}</dd>`);
-  });
+  const section = (title, fields) =>
+    fields.some(([k]) => a[k]) ? `<dt class="muted">— ${title} —</dt><dd></dd>` + definitionList(a, fields) : "";
+
+  el("d-fields").innerHTML =
+    definitionList(a, PROFILE_FIELDS) +
+    section("Eligibility", ELIGIBILITY_FIELDS) +
+    section("Experience", EXPERIENCE_FIELDS);
+
+  renderAnswers(a);
 }
 
-async function loadQuizBreakdown(id) {
-  const summary = document.getElementById("quiz-summary");
-  const body = document.getElementById("quiz-body");
-  try {
-    const q = await adminCall("GET", `/admin/applications/${id}/quiz/`);
-    summary.innerHTML = `
-      <div class="alert alert-info d-flex justify-content-between mb-0">
-        <span><strong>Score:</strong> ${q.score} / ${q.total}</span>
-        <span>${q.completed_at ? "Completed " + new Date(q.completed_at).toLocaleString() : "Not completed"}</span>
-      </div>`;
-    body.innerHTML = "";
-    q.questions.forEach((item) => {
-      const result = item.timed_out
-        ? '<span class="badge bg-secondary">Timed out</span>'
-        : item.is_correct
-          ? '<span class="badge bg-success"><i class="bi bi-check-lg"></i></span>'
-          : '<span class="badge bg-danger"><i class="bi bi-x-lg"></i></span>';
-      body.insertAdjacentHTML("beforeend", `
-        <tr>
-          <td>${item.position + 1}</td>
-          <td>${esc(item.question_text)}</td>
-          <td><span class="badge bg-light text-dark border category-pill">${esc((item.category || "").toLowerCase())}</span></td>
-          <td>${item.submitted_answer ? esc(item.submitted_answer) : "<span class='text-muted'>—</span>"}</td>
-          <td>${esc(item.correct_answer)}</td>
-          <td class="text-center">${result}</td>
-        </tr>`);
-    });
-  } catch (err) {
-    if (err.status === 404) {
-      summary.innerHTML = `<div class="alert alert-secondary mb-0">This applicant has not started the quiz.</div>`;
-    } else if (err.status !== 401) {
-      summary.innerHTML = `<div class="alert alert-danger mb-0">Failed to load quiz breakdown.</div>`;
-    }
-  }
+// "Their answers" tab: the honesty grid and the written answers -- the two
+// things a reviewer actually reads.
+function renderAnswers(a) {
+  const summary = a.claim_summary || {};
+  const claims = a.claims || {};
+  const rows = Object.keys(claims).sort();
+  const fake = new Set(summary.fake_names || []);
+  const LABEL = { used: "Used it", heard: "Heard of it", no: "Doesn't know it" };
+
+  const honesty = rows.length ? `
+    <h2>Honesty check</h2>
+    <p class="muted">Claimed ${summary.real_used}/${summary.real_total} real functions.
+      ${summary.fakes_claimed
+        ? `<span class="flag">Claimed ${summary.fakes_claimed} invented function(s)${
+            summary.bluffs ? `, ${summary.bluffs} as used` : ""}</span>`
+        : "No invented functions claimed."}</p>
+    <div class="table-wrap"><table class="data">
+      <thead><tr><th>Function</th><th>Answer</th><th>Real?</th></tr></thead>
+      <tbody>${rows.map((fn) => `
+        <tr><td><code>${esc(fn)}()</code></td>
+            <td>${LABEL[claims[fn]] || esc(claims[fn])}</td>
+            <td>${fake.has(fn) ? '<span class="tag tag-bad">Invented</span>'
+                               : '<span class="tag tag-mute">Real</span>'}</td></tr>`).join("")}
+      </tbody></table></div>` : "";
+
+  const written = WRITTEN_FIELDS.filter(([k]) => a[k]).map(([key, label]) => `
+    <h3>${label}</h3>
+    ${key === "written_code"
+      ? `<pre class="code">${esc(a[key])}</pre>`
+      : `<p style="white-space:pre-wrap">${esc(a[key])}</p>`}`).join("");
+
+  el("d-answers").innerHTML =
+    (honesty + (written ? `<h2>Written answers</h2>${written}` : "")) ||
+    `<p class="muted">This applicant has not answered these steps yet.</p>`;
 }
 
-// Tabs
-document.querySelectorAll("[data-tab]").forEach((btn) =>
-  btn.addEventListener("click", () => switchTab(btn.dataset.tab)));
+document.querySelectorAll("[data-tab]").forEach((button) =>
+  button.addEventListener("click", () => switchTab(button.dataset.tab)));
 
 function switchTab(name) {
   document.querySelectorAll("[data-tab]").forEach((b) =>
-    b.classList.toggle("active", b.dataset.tab === name));
-  document.getElementById("tab-profile").classList.toggle("d-none", name !== "profile");
-  document.getElementById("tab-quiz").classList.toggle("d-none", name !== "quiz");
+    b.classList.toggle("on", b.dataset.tab === name));
+  ["profile", "answers", "quiz"].forEach((t) => hide(el(`tab-${t}`), t !== name));
 }
 
-document.getElementById("back-to-list").addEventListener("click", () => loadList());
-
-// Detail decision buttons
-document.querySelectorAll("[data-decision]").forEach((btn) =>
-  btn.addEventListener("click", () => setDecision(btn.dataset.decision)));
-
-async function setDecision(action) {
-  if (!currentDetailId) return;
-  const detailAlert = document.getElementById("detail-alert");
-  detailAlert.classList.add("d-none");
+async function loadQuizBreakdown(id) {
   try {
-    const a = await adminCall("PATCH", `/admin/applications/${currentDetailId}/`,
-      { decision: DECISION_VALUE[action] });
-    document.getElementById("d-decision").innerHTML =
-      DECISION_BADGE[a.decision] || esc(a.decision || "");
+    const q = await adminCall("GET", `/admin/applications/${id}/quiz/`);
+    el("quiz-summary").innerHTML = `
+      <div class="note"><strong>${q.score} / ${q.total}</strong> correct
+        ${q.completed_at ? `· completed ${when(q.completed_at)}` : "· in progress"}</div>`;
+    el("quiz-body").innerHTML = q.questions.map((item) => `
+      <tr>
+        <td>${item.position + 1}</td>
+        <td>${esc(item.question_text)}</td>
+        <td class="muted">${esc((item.category || "").toLowerCase())}</td>
+        <td>${esc(item.submitted_answer || "—")}</td>
+        <td>${esc(item.correct_answer)}</td>
+        <td>${item.is_correct ? '<span class="tag tag-ok">Correct</span>'
+              : item.timed_out ? '<span class="tag tag-warn">Timed out</span>'
+              : '<span class="tag tag-bad">Wrong</span>'}</td>
+      </tr>`).join("");
   } catch (err) {
-    if (err.status !== 401) {
-      detailAlert.textContent = (err.data && err.data.detail) || "Could not update decision.";
-      detailAlert.classList.remove("d-none");
+    if (err.status === 404) {
+      el("quiz-summary").innerHTML =
+        `<p class="muted">This applicant has not started the knowledge check.</p>`;
     }
   }
 }
 
-// Detail delete
-document.getElementById("d-delete").addEventListener("click", async () => {
-  if (!currentDetailId) return;
+document.querySelectorAll("[data-decision]").forEach((button) =>
+  button.addEventListener("click", async () => {
+    hide(el("detail-alert"), true);
+    try {
+      const updated = await adminCall("PATCH", `/admin/applications/${currentDetailId}/`,
+                                      { decision: DECISION_VALUE[button.dataset.decision] });
+      renderDetail(updated);
+    } catch (err) {
+      if (err.status !== 401) {
+        el("detail-alert").textContent =
+          (err.data && err.data.detail) || "Could not update the decision.";
+        hide(el("detail-alert"), false);
+      }
+    }
+  }));
+
+el("d-delete").addEventListener("click", async () => {
   if (!confirm("Delete this applicant? This also removes their CV and quiz, and cannot be undone.")) return;
   try {
     await adminCall("DELETE", `/admin/applications/${currentDetailId}/`);
     loadList();
   } catch (err) {
     if (err.status !== 401) {
-      const detailAlert = document.getElementById("detail-alert");
-      detailAlert.textContent = (err.data && err.data.detail) || "Could not delete applicant.";
-      detailAlert.classList.remove("d-none");
+      el("detail-alert").textContent =
+        (err.data && err.data.detail) || "Could not delete the applicant.";
+      hide(el("detail-alert"), false);
     }
   }
 });
 
-// ------------------------------------------------------------------ Helpers
-function esc(s) {
-  return String(s).replace(/[&<>"']/g, (c) =>
-    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
-}
+el("back-to-list").addEventListener("click", loadList);
 
-// ------------------------------------------------------------------ Boot
+/* ------------------------------------------------------------------- boot */
 (async function boot() {
   if (!TOKEN.get()) { showView("login"); return; }
   // Validate the saved token before showing anything staff-only.

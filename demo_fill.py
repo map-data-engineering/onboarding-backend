@@ -2,13 +2,16 @@
 """
 Demo API fill for the onboarding application flow.
 
-Drives the public API exactly like a real client would:
+Drives the public API exactly like a real client would, through all seven steps:
     1. POST /api/applications/                       -> create applicant (details only)
-    2. POST /api/applications/<id>/quiz/start/        -> build the shuffled session
-    3. GET  /api/quiz/<session>/current/             -> fetch the current question
-    4. POST /api/quiz/<session>/answer/              -> submit an answer  (repeat)
-    5. GET  /api/quiz/<session>/result/              -> final score
-    6. POST /api/applications/<id>/finalize/          -> motivation + expectations + CV
+    2. POST /api/applications/<id>/eligibility/       -> the four practical questions
+    3. POST /api/applications/<id>/experience/        -> experience and plans
+    4. GET/POST /api/applications/<id>/claims/        -> the honesty check
+    5. POST /api/applications/<id>/quiz/start/        -> build the shuffled session
+       GET  /api/quiz/<session>/current/             -> fetch the current question
+       POST /api/quiz/<session>/answer/              -> submit an answer  (repeat)
+       GET  /api/quiz/<session>/result/              -> final score
+    6. POST /api/applications/<id>/finalize/          -> written answers + CV
                                                         (only if the score passed)
 
 Usage:
@@ -50,10 +53,35 @@ APPLICANT = {
     "bayesian_knowledge": "Beginner",
 }
 
-# Collected in the final step, after the quiz has been passed.
+# Step 2 — eligibility. These exact strings are validated server-side.
+ELIGIBILITY = {
+    "elig_attend": "Yes, all four days",
+    "elig_laptop": "Yes",
+    "elig_data": "Yes, I work with it now",
+    "elig_funding": "My institution has agreed to cover it",
+}
+
+# Step 3 — experience and plans.
+EXPERIENCE = {
+    "exp_rfreq": "Most weeks",
+    "exp_rself": "Intermediate — I write my own analysis scripts",
+    "exp_bayes": "Beginner",
+    "exp_glm": "Yes, several times",
+    "exp_dtype": "Survey or sampling points with coordinates",
+    "exp_when": "Within six months",
+    "exp_share": "Yes, in principle",
+    "exp_use": "Sometimes",
+}
+
+# Step 6 — collected only after the quiz has been passed.
 FINAL_STEP = {
-    "motivation": "I want to apply spatial Bayesian methods to malaria risk mapping.",
-    "expectations": "Hands-on experience with sf, ggplot2 and Bayesian workflows in R.",
+    "written_dataset": "One row per household surveyed in Kilombero district between 2019 and "
+                       "2023, about 4,200 rows, with GPS coordinates for each homestead.",
+    "written_code": "library(sf)\npts <- st_read('households.gpkg')\n"
+                    "pts <- st_transform(pts, 32737)\n# reproject before buffering",
+    "written_why_not_ols": "The outcome is a count with many zeros and nearby households are "
+                           "correlated, so OLS would understate the uncertainty.",
+    "written_other": "",
 }
 
 CV_BYTES = (
@@ -137,6 +165,42 @@ def main():
     application_id = app["id"]
     print(f"  [ok] Application created: {application_id} ({app['first_name']} {app['last_name']})")
 
+    for label, path, payload in (
+        ("eligibility", "eligibility", ELIGIBILITY),
+        ("experience", "experience", EXPERIENCE),
+    ):
+        print(f"-> Submitting {label} ...")
+        status, resp = _request(
+            "POST",
+            f"{base}/api/applications/{application_id}/{path}/",
+            data=json.dumps(payload).encode(),
+            headers={"Content-Type": "application/json"},
+        )
+        if status != 200:
+            print(f"[x] {label} rejected ({status}): {resp}")
+            sys.exit(1)
+        if label == "eligibility" and not resp.get("eligible"):
+            print(f"  [--] Ruled out: {resp['reason']}")
+            return
+        print(f"  [ok] {label} accepted")
+
+    print("-> Honesty check ...")
+    status, resp = _request("GET", f"{base}/api/applications/{application_id}/claims/")
+    # Answer honestly: this demo "knows" the four common ones and nothing else,
+    # which is also the only way to score the honesty component.
+    known = {"read.csv", "group_by", "ggplot", "glm"}
+    claims = {fn: ("used" if fn in known else "no") for fn in resp["functions"]}
+    status, resp = _request(
+        "POST",
+        f"{base}/api/applications/{application_id}/claims/",
+        data=json.dumps({"claims": claims}).encode(),
+        headers={"Content-Type": "application/json"},
+    )
+    if status != 200:
+        print(f"[x] Honesty check rejected ({status}): {resp}")
+        sys.exit(1)
+    print(f"  [ok] answered for {len(claims)} functions")
+
     print("-> Starting quiz ...")
     status, current = _request(
         "POST", f"{base}/api/applications/{application_id}/quiz/start/"
@@ -188,7 +252,7 @@ def main():
         )
         return
 
-    print("\n-> Submitting the final step (motivation, expectations, CV) ...")
+    print("\n-> Submitting the final step (written answers + CV) ...")
     body, content_type = _encode_multipart(
         FINAL_STEP, "cv", "ada_lovelace_cv.txt", CV_BYTES
     )
