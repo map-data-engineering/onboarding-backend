@@ -113,6 +113,7 @@ const els = {
   category:    document.getElementById("q-category"),
   countdown:   document.getElementById("q-countdown"),
   text:        document.getElementById("q-text"),
+  code:        document.getElementById("q-code"),
   options:     document.getElementById("q-options"),
   submit:      document.getElementById("submit-answer"),
   status:      document.getElementById("q-status"),
@@ -154,6 +155,12 @@ function renderQuestion(payload) {
   els.category.textContent = (q.category || "").toLowerCase();
   els.text.textContent = q.text;
 
+  // Optional code sample, shown verbatim under the question. textContent (not
+  // innerHTML) so a snippet containing < or & renders as code, never as markup.
+  els.code.querySelector("code").textContent = q.code || "";
+  els.code.classList.toggle("d-none", !q.code);
+
+  // Option order is decided per applicant by the server; render as received.
   els.options.innerHTML = "";
   q.options.forEach((opt) => {
     const b = document.createElement("button");

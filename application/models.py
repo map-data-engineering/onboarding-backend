@@ -14,16 +14,21 @@ class Question(models.Model):
     class Category(models.TextChoices):
         R = "R", "R programming"
         SPATIAL = "SPATIAL", "Spatial data"
+        GENERAL = "GENERAL", "General statistics"
         BAYESIAN = "BAYESIAN", "Bayesian statistics"
         APPLICATION = "APPLICATION", "Health applications"
 
     text = models.CharField(max_length=500)
+    # Optional code sample shown under the question in a monospaced block, so a
+    # snippet like `d %>% group_by(district)` keeps its formatting instead of
+    # being wrapped into the prose.
+    code = models.TextField(blank=True)
     category = models.CharField(max_length=20, choices=Category.choices)
     # e.g. ["read.csv()", "load.csv()", "import.csv()", "open.csv()"]
     options = models.JSONField(help_text="List of option strings shown to the applicant.")
     # Must match one of the strings in `options` exactly. NEVER exposed to the client.
     correct_answer = models.CharField(max_length=255)
-    time_limit_seconds = models.PositiveIntegerField(default=40)
+    time_limit_seconds = models.PositiveIntegerField(default=25)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -137,6 +142,12 @@ class SessionQuestion(models.Model):
     )
     question = models.ForeignKey(Question, on_delete=models.PROTECT)
     position = models.PositiveIntegerField()  # shuffled order, 0-based
+
+    # The option order this applicant sees, shuffled once when the session is
+    # built and then frozen. Two applicants from the same institution get "the
+    # answer is C" wrong if they compare notes, and re-fetching a question can't
+    # reshuffle the options under someone mid-answer.
+    option_order = models.JSONField(null=True, blank=True)
 
     served_at = models.DateTimeField(null=True, blank=True)
     answered_at = models.DateTimeField(null=True, blank=True)

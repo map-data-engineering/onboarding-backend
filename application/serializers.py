@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from .models import Application, Question, QuizSession, SessionQuestion
-from .services import PASS_MARK, _deadline, has_passed
+from .services import PASS_MARK, _deadline, has_passed, options_for
 
 
 class ApplicationSerializer(serializers.ModelSerializer):
@@ -37,7 +37,7 @@ class QuestionPublicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Question
-        fields = ["id", "text", "category", "options", "time_limit_seconds"]
+        fields = ["id", "text", "code", "category", "options", "time_limit_seconds"]
 
 
 class CurrentQuestionSerializer(serializers.Serializer):
@@ -46,12 +46,19 @@ class CurrentQuestionSerializer(serializers.Serializer):
     session = serializers.UUIDField(source="session_id")
     position = serializers.IntegerField()
     total = serializers.SerializerMethodField()
-    question = QuestionPublicSerializer()
+    question = serializers.SerializerMethodField()
     time_limit_seconds = serializers.IntegerField(source="question.time_limit_seconds")
     deadline = serializers.SerializerMethodField()
 
     def get_total(self, item):
         return item.session.total
+
+    def get_question(self, item):
+        # Serialise the question, then swap in this applicant's own option order
+        # (see services.build_session -- options are shuffled per session).
+        data = QuestionPublicSerializer(item.question).data
+        data["options"] = options_for(item)
+        return data
 
     def get_deadline(self, item):
         # ISO timestamp the client renders a countdown against; the server still

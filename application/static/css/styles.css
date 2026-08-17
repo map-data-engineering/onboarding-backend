@@ -25,6 +25,20 @@ body {
 }
 .countdown.danger { color: #dc3545; }
 
+/* Optional code sample under a question (e.g. an R snippet). Kept compact so it
+   doesn't push the options below the fold on a phone. */
+.q-code {
+  background: #f6f8fa;
+  border: 1px solid #e2e6ea;
+  border-radius: .375rem;
+  padding: .75rem 1rem;
+  margin-bottom: 1.25rem;
+  font-size: .9rem;
+  overflow-x: auto;
+  white-space: pre;
+}
+.q-code code { color: #24292f; }
+
 .quiz-option {
   text-align: left;
   white-space: normal;

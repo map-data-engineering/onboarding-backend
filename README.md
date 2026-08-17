@@ -17,9 +17,10 @@ Bayesian statistics.
   expectations and CV upload are gated behind the quiz and are collected in a final step, unlocked
   only for applicants scoring **7 or more** (`services.PASS_MARK`). The gate is enforced
   server-side, not just hidden in the UI.
-- **Timed quiz** — one question at a time, shuffled once per applicant and frozen. The 40s-per-question
-  deadline (plus a 3s network grace) is **server-authoritative**: the client can't grant itself more
-  time, restart, or reshuffle.
+- **Timed quiz** — one question at a time. Both the question order **and the answer options** are
+  shuffled per applicant and then frozen, so "the answer is B" is worthless to pass around. The
+  25s-per-question deadline (plus a 3s network grace) is **server-authoritative**: the client can't
+  grant itself more time, restart, or reshuffle.
 - **Hidden grading** — correct answers are never sent to the applicant; only the final score is
   revealed at the end.
 - **Pass/fail status** — every applicant carries a `status` derived from their score: **Pass**
@@ -200,7 +201,17 @@ The panel hides the controls a viewer can't use, but that's cosmetic — `PATCH`
 ### Editing the question set
 
 `application/management/commands/seed_questions.py` holds the canonical list, transcribed from
-*Onboarding Portal — Knowledge Check Questions* (2 R, 4 spatial, 6 Bayesian). Edit that list and
+*Onboarding Portal — Knowledge Check Questions*: **2 R, 4 spatial, 2 general statistics, 3 Bayesian,
+1 health application = 12**, at **25 seconds each**.
+
+Each entry is `(category, text, options, correct_answer[, code[, seconds]])`:
+
+- **`code`** renders under the question in a monospaced block — use it for snippets like
+  `d %>% group_by(district)` instead of burying them in the prose.
+- **`seconds`** overrides `DEFAULT_SECONDS` for one question, so a long scenario item can be given
+  more room than a short recall one.
+
+Edit that list and
 re-run `seed_questions`: it **updates** existing questions in place (matched on their text) and
 **retires** anything no longer listed — setting `is_active=False` rather than deleting, since
 `build_session` only serves active questions while past quizzes must stay auditable. Questions never

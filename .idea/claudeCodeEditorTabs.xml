@@ -1,26 +1,23 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="ClaudeCodeEditorTabs">
-    <option name="activeSessionId" value="dff8d1fe-4c4b-4f3b-b231-dc04e23c55ee" />
+    <option name="activeSessionId" value="b52d9295-3bfe-4f64-8e12-75de9dc3ae94" />
     <option name="openSessionIds">
       <list>
         <option value="d5fcefab-9ad9-4a31-b2b4-94fcc4209453" />
         <option value="b52d9295-3bfe-4f64-8e12-75de9dc3ae94" />
-        <option value="dff8d1fe-4c4b-4f3b-b231-dc04e23c55ee" />
       </list>
     </option>
     <option name="sessionPaths">
       <map>
         <entry key="b52d9295-3bfe-4f64-8e12-75de9dc3ae94" value="/sessions/new" />
         <entry key="d5fcefab-9ad9-4a31-b2b4-94fcc4209453" value="/sessions/8c142b37-e9aa-49b7-b1ee-1de9d00231c8" />
-        <entry key="dff8d1fe-4c4b-4f3b-b231-dc04e23c55ee" value="/sessions/b8adc059-b4ac-4b24-8384-dba3a13619dc" />
       </map>
     </option>
     <option name="sessionTitles">
       <map>
         <entry key="b52d9295-3bfe-4f64-8e12-75de9dc3ae94" value="Claude Code" />
         <entry key="d5fcefab-9ad9-4a31-b2b4-94fcc4209453" value="look at the project , in the application i want us" />
-        <entry key="dff8d1fe-4c4b-4f3b-b231-dc04e23c55ee" value="claude--continue and push changes to github" />
       </map>
     </option>
   </component>

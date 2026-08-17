@@ -1,0 +1,937 @@
+<!DOCTYPE html>
+<!-- saved from url=(0172)file:///C:/Users/samzy/AppData/Local/Packages/5319275A.51895FA4EA97F_cv1g1gvanyjgm/LocalState/sessions/9C9597C2792FA867A6AE18FA9551A8BC751292B4/transfers/2026-33/apply.html -->
+<html lang="en"><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apply — Application Portal</title>
+<link rel="preconnect" href="https://fonts.googleapis.com/">
+<link rel="preconnect" href="https://fonts.gstatic.com/" crossorigin="">
+<link href="./Apply — Application Portal_files/css2" rel="stylesheet">
+<style>
+/* Malaria Atlas Project style tile
+   Primary palette: #EBBC40 gold · #111010 black · #383838 charcoal
+                    #9E9C97 warm grey · #F3F3F3 light grey
+   Heading font: Lato · Body font: Nunito Sans
+   Note: #9E9C97 fails contrast for body text, so it is used only for rules, borders
+   and dividers; muted text uses a darker tint of the same warm hue. Semantic
+   green/amber/red are outside the tile but required for correct/incorrect states. */
+:root{
+  --gold:#EBBC40; --gold-dk:#c99c26; --gold-tint:#fdf6e6;
+  --black:#111010; --charcoal:#383838; --warm:#9E9C97; --light:#F3F3F3;
+  --navy:#111010; --navy2:#383838;            /* legacy names kept for brevity */
+  --ink:#111010; --grey:#6f6d68;
+  --line:#e0deda; --bg:#F3F3F3;
+  --ok:#2f6b3f; --warn:#9a6b12; --bad:#96331f;
+  --head:"Lato",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  --body:"Nunito Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",Arial,sans-serif;
+  --radius:10px;
+}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.6 var(--body);color:var(--ink);background:var(--bg)}
+header{background:#fff;border-bottom:3px solid var(--gold);padding:14px 20px;
+  display:flex;align-items:center;gap:14px;position:sticky;top:0;z-index:10}
+header .brand{font-family:var(--head);font-weight:700;color:var(--black);font-size:17px;
+  letter-spacing:.01em}
+header .sub{color:var(--grey);font-size:13px}
+.wrap{max-width:820px;margin:0 auto;padding:22px 18px 70px}
+.card{background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+  padding:26px;box-shadow:0 1px 3px rgba(17,16,16,.06)}
+h1{font-family:var(--head);font-size:25px;margin:0 0 6px;color:var(--black);letter-spacing:-.01em}
+h2{font-family:var(--head);font-size:19px;margin:26px 0 10px;color:var(--black)}
+p.lead{color:var(--grey);margin:0 0 20px}
+.steps{display:flex;gap:6px;flex-wrap:wrap;margin:0 0 22px;padding:0;list-style:none}
+.steps li{font-size:12px;color:var(--grey);background:#e8e6e2;border-radius:20px;
+  padding:5px 12px;white-space:nowrap}
+.steps li.on{background:var(--gold);color:var(--black);font-weight:700}
+.steps li.done{background:var(--charcoal);color:#fff}
+label{display:block;font-family:var(--head);font-size:13px;font-weight:700;margin:14px 0 5px}
+label .req{color:var(--bad);font-weight:400}
+input[type=text],input[type=email],input[type=tel],select,textarea{
+  width:100%;padding:10px 12px;border:1px solid #cbc9c4;border-radius:8px;
+  font:inherit;font-size:15px;background:#fff}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--gold);
+  box-shadow:0 0 0 3px rgba(235,188,64,.28)}
+textarea{min-height:92px;resize:vertical}
+.hint{font-size:12.5px;color:var(--grey);margin:4px 0 0}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 16px}
+@media(max-width:620px){.grid2{grid-template-columns:1fr}}
+button{font-family:var(--head);font-weight:700;cursor:pointer;border-radius:8px;
+  border:1px solid transparent;padding:11px 22px;font-size:15px;letter-spacing:.01em}
+.btn{background:var(--gold);color:var(--black)}
+.btn:hover{background:var(--gold-dk)}
+.btn[disabled]{background:#ded9cd;color:#8a8781;cursor:not-allowed}
+.btn-ghost{background:#fff;color:var(--black);border-color:#cbc9c4}
+.btn-ghost:hover{background:var(--light)}
+.actions{margin-top:26px;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.note{background:var(--light);border-left:4px solid var(--charcoal);padding:12px 14px;
+  border-radius:0 8px 8px 0;font-size:14px;margin:16px 0}
+.warnbox{background:var(--gold-tint);border-left:4px solid var(--gold);padding:12px 14px;
+  border-radius:0 8px 8px 0;font-size:14px;margin:16px 0}
+.err{color:var(--bad);font-size:13.5px;margin-top:12px;font-weight:600}
+ul.tight{margin:8px 0 0;padding-left:20px;font-size:14.5px}
+ul.tight li{margin:5px 0}
+/* quiz */
+.qmeta{display:flex;justify-content:space-between;align-items:center;font-size:13px;
+  color:var(--grey);margin-bottom:8px}
+.bar{height:6px;background:#e0deda;border-radius:4px;overflow:hidden;margin-bottom:22px}
+.bar>i{display:block;height:100%;background:var(--gold);width:100%;
+  transition:width .95s linear}
+.bar.low>i{background:var(--gold-dk)}
+.bar.crit>i{background:var(--bad)}
+.qstem{font-family:var(--head);font-size:17.5px;font-weight:700;margin:0 0 14px;line-height:1.45}
+pre.code{background:var(--light);border:1px solid var(--line);border-left:3px solid var(--gold);
+  border-radius:8px;padding:12px 14px;
+  font:14px/1.5 ui-monospace,Consolas,Menlo,monospace;overflow-x:auto;margin:0 0 16px}
+.opt{display:block;border:1px solid #cbc9c4;border-radius:8px;padding:12px 14px;
+  margin-bottom:9px;cursor:pointer;background:#fff;font-size:15px;transition:.12s}
+.opt:hover{border-color:var(--gold);background:#fffdf7}
+.opt input{margin-right:10px;accent-color:var(--charcoal)}
+.opt.sel{border-color:var(--gold);background:var(--gold-tint);
+  box-shadow:0 0 0 1px var(--gold) inset}
+/* grid table */
+table.claim{width:100%;border-collapse:collapse;font-size:14.5px;margin-top:10px}
+table.claim th{background:var(--black);color:#fff;font-family:var(--head);font-weight:700;
+  padding:9px 8px;font-size:12.5px;text-align:center}
+table.claim th:first-child{text-align:left}
+table.claim td{border-bottom:1px solid var(--line);padding:8px;text-align:center}
+table.claim td:first-child{text-align:left;font-family:ui-monospace,Consolas,monospace;font-size:14px}
+table.claim tr:nth-child(even) td{background:var(--light)}
+table.claim input{accent-color:var(--charcoal)}
+.done-box{text-align:center;padding:20px 0}
+.big{font-family:var(--head);font-size:44px;font-weight:700;color:var(--black);margin:10px 0}
+code.inline{font-family:ui-monospace,Consolas,monospace;background:var(--light);
+  padding:1px 5px;border-radius:4px;font-size:14px}
+.foot{margin-top:28px;font-size:12.5px;color:var(--grey);text-align:center}
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <div class="brand">Application Portal</div>
+    <div class="sub">Spatial &amp; spatio-temporal modelling with inlabru · Dodoma, 15–18 September 2026</div>
+  </div>
+</header>
+
+<div class="wrap">
+  <ul class="steps" id="steps"><li class="on">1. Details</li><li class="">2. Eligibility</li><li class="">3. Experience</li><li class="">4. Honesty check</li><li class="">5. Knowledge check</li><li class="">6. Your work</li><li class="">7. Submit</li></ul>
+  <div class="card" id="stage">
+  <h1>Apply to the workshop</h1>
+  <p class="lead">Spatial and spatio-temporal modelling with <code class="inline">inlabru</code>,
+  taught by Prof. Janine Illian, with seminars on spatial disaggregation and from the
+  National Bureau of Statistics, Tanzania. Dodoma, 15–18 September 2026.</p>
+
+  <div class="warnbox"><strong>Before you begin — costs.</strong> There is no fee to attend,
+  but <strong>we are not able to fund any participant's travel, accommodation or subsistence</strong>.
+  Participants must cover these themselves or through their institution. We have no bursaries
+  and no partial support, and this will not change. Please only apply if you can realistically
+  get to Dodoma for 15–18 September.</div>
+
+  <div class="note"><strong>What to expect.</strong> About 15 minutes in total: a few
+  questions about your background, a short timed knowledge check, and three brief written
+  answers. <strong>You do not need any prior knowledge of INLA or inlabru</strong> — those are
+  what we will teach. Applications close Friday 28 August 2026.</div>
+
+  <h2>Your details</h2>
+  <div class="grid2">
+    <div><label>First name <span class="req">*</span></label><input type="text" id="d_first"></div>
+    <div><label>Last name <span class="req">*</span></label><input type="text" id="d_last"></div>
+    <div><label>Email <span class="req">*</span></label><input type="email" id="d_email">
+      <p class="hint">An institutional address is preferred where you have one.</p></div>
+    <div><label>WhatsApp number — including country code <span class="req">*</span></label>
+      <input type="tel" id="d_phone" placeholder="+255 712 345 678">
+      <p class="hint">We use WhatsApp for practical updates before and during the workshop.
+      Start with <strong>+</strong> and your country code — for example +255 for Tanzania,
+      +254 Kenya, +256 Uganda, +44 UK.</p></div>
+    <div><label>Country of residence <span class="req">*</span></label>
+      <select id="d_country"><option value="">Choose…</option><optgroup label="Tanzania and the region"><option value="Tanzania">Tanzania</option><option value="Kenya">Kenya</option><option value="Uganda">Uganda</option><option value="Rwanda">Rwanda</option><option value="Burundi">Burundi</option><option value="Zambia">Zambia</option><option value="Malawi">Malawi</option><option value="Mozambique">Mozambique</option><option value="Democratic Republic of the Congo">Democratic Republic of the Congo</option><option value="Ethiopia">Ethiopia</option><option value="South Sudan">South Sudan</option><option value="Somalia">Somalia</option></optgroup><optgroup label="All countries"><option value="Afghanistan">Afghanistan</option><option value="Albania">Albania</option><option value="Algeria">Algeria</option><option value="Andorra">Andorra</option><option value="Angola">Angola</option><option value="Antigua and Barbuda">Antigua and Barbuda</option><option value="Argentina">Argentina</option><option value="Armenia">Armenia</option><option value="Australia">Australia</option><option value="Austria">Austria</option><option value="Azerbaijan">Azerbaijan</option><option value="Bahamas">Bahamas</option><option value="Bahrain">Bahrain</option><option value="Bangladesh">Bangladesh</option><option value="Barbados">Barbados</option><option value="Belarus">Belarus</option><option value="Belgium">Belgium</option><option value="Belize">Belize</option><option value="Benin">Benin</option><option value="Bhutan">Bhutan</option><option value="Bolivia">Bolivia</option><option value="Bosnia and Herzegovina">Bosnia and Herzegovina</option><option value="Botswana">Botswana</option><option value="Brazil">Brazil</option><option value="Brunei">Brunei</option><option value="Bulgaria">Bulgaria</option><option value="Burkina Faso">Burkina Faso</option><option value="Burundi">Burundi</option><option value="Cabo Verde">Cabo Verde</option><option value="Cambodia">Cambodia</option><option value="Cameroon">Cameroon</option><option value="Canada">Canada</option><option value="Central African Republic">Central African Republic</option><option value="Chad">Chad</option><option value="Chile">Chile</option><option value="China">China</option><option value="Colombia">Colombia</option><option value="Comoros">Comoros</option><option value="Congo (Republic of)">Congo (Republic of)</option><option value="Costa Rica">Costa Rica</option><option value="Côte d&#39;Ivoire">Côte d'Ivoire</option><option value="Croatia">Croatia</option><option value="Cuba">Cuba</option><option value="Cyprus">Cyprus</option><option value="Czechia">Czechia</option><option value="Democratic Republic of the Congo">Democratic Republic of the Congo</option><option value="Denmark">Denmark</option><option value="Djibouti">Djibouti</option><option value="Dominica">Dominica</option><option value="Dominican Republic">Dominican Republic</option><option value="Ecuador">Ecuador</option><option value="Egypt">Egypt</option><option value="El Salvador">El Salvador</option><option value="Equatorial Guinea">Equatorial Guinea</option><option value="Eritrea">Eritrea</option><option value="Estonia">Estonia</option><option value="Eswatini">Eswatini</option><option value="Ethiopia">Ethiopia</option><option value="Fiji">Fiji</option><option value="Finland">Finland</option><option value="France">France</option><option value="Gabon">Gabon</option><option value="Gambia">Gambia</option><option value="Georgia">Georgia</option><option value="Germany">Germany</option><option value="Ghana">Ghana</option><option value="Greece">Greece</option><option value="Grenada">Grenada</option><option value="Guatemala">Guatemala</option><option value="Guinea">Guinea</option><option value="Guinea-Bissau">Guinea-Bissau</option><option value="Guyana">Guyana</option><option value="Haiti">Haiti</option><option value="Honduras">Honduras</option><option value="Hungary">Hungary</option><option value="Iceland">Iceland</option><option value="India">India</option><option value="Indonesia">Indonesia</option><option value="Iran">Iran</option><option value="Iraq">Iraq</option><option value="Ireland">Ireland</option><option value="Israel">Israel</option><option value="Italy">Italy</option><option value="Jamaica">Jamaica</option><option value="Japan">Japan</option><option value="Jordan">Jordan</option><option value="Kazakhstan">Kazakhstan</option><option value="Kenya">Kenya</option><option value="Kiribati">Kiribati</option><option value="Kuwait">Kuwait</option><option value="Kyrgyzstan">Kyrgyzstan</option><option value="Laos">Laos</option><option value="Latvia">Latvia</option><option value="Lebanon">Lebanon</option><option value="Lesotho">Lesotho</option><option value="Liberia">Liberia</option><option value="Libya">Libya</option><option value="Liechtenstein">Liechtenstein</option><option value="Lithuania">Lithuania</option><option value="Luxembourg">Luxembourg</option><option value="Madagascar">Madagascar</option><option value="Malawi">Malawi</option><option value="Malaysia">Malaysia</option><option value="Maldives">Maldives</option><option value="Mali">Mali</option><option value="Malta">Malta</option><option value="Marshall Islands">Marshall Islands</option><option value="Mauritania">Mauritania</option><option value="Mauritius">Mauritius</option><option value="Mexico">Mexico</option><option value="Micronesia">Micronesia</option><option value="Moldova">Moldova</option><option value="Monaco">Monaco</option><option value="Mongolia">Mongolia</option><option value="Montenegro">Montenegro</option><option value="Morocco">Morocco</option><option value="Mozambique">Mozambique</option><option value="Myanmar">Myanmar</option><option value="Namibia">Namibia</option><option value="Nauru">Nauru</option><option value="Nepal">Nepal</option><option value="Netherlands">Netherlands</option><option value="New Zealand">New Zealand</option><option value="Nicaragua">Nicaragua</option><option value="Niger">Niger</option><option value="Nigeria">Nigeria</option><option value="North Korea">North Korea</option><option value="North Macedonia">North Macedonia</option><option value="Norway">Norway</option><option value="Oman">Oman</option><option value="Pakistan">Pakistan</option><option value="Palau">Palau</option><option value="Palestine">Palestine</option><option value="Panama">Panama</option><option value="Papua New Guinea">Papua New Guinea</option><option value="Paraguay">Paraguay</option><option value="Peru">Peru</option><option value="Philippines">Philippines</option><option value="Poland">Poland</option><option value="Portugal">Portugal</option><option value="Qatar">Qatar</option><option value="Romania">Romania</option><option value="Russia">Russia</option><option value="Rwanda">Rwanda</option><option value="Saint Kitts and Nevis">Saint Kitts and Nevis</option><option value="Saint Lucia">Saint Lucia</option><option value="Saint Vincent and the Grenadines">Saint Vincent and the Grenadines</option><option value="Samoa">Samoa</option><option value="San Marino">San Marino</option><option value="São Tomé and Príncipe">São Tomé and Príncipe</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Senegal">Senegal</option><option value="Serbia">Serbia</option><option value="Seychelles">Seychelles</option><option value="Sierra Leone">Sierra Leone</option><option value="Singapore">Singapore</option><option value="Slovakia">Slovakia</option><option value="Slovenia">Slovenia</option><option value="Solomon Islands">Solomon Islands</option><option value="Somalia">Somalia</option><option value="South Africa">South Africa</option><option value="South Korea">South Korea</option><option value="South Sudan">South Sudan</option><option value="Spain">Spain</option><option value="Sri Lanka">Sri Lanka</option><option value="Sudan">Sudan</option><option value="Suriname">Suriname</option><option value="Sweden">Sweden</option><option value="Switzerland">Switzerland</option><option value="Syria">Syria</option><option value="Tajikistan">Tajikistan</option><option value="Tanzania">Tanzania</option><option value="Thailand">Thailand</option><option value="Timor-Leste">Timor-Leste</option><option value="Togo">Togo</option><option value="Tonga">Tonga</option><option value="Trinidad and Tobago">Trinidad and Tobago</option><option value="Tunisia">Tunisia</option><option value="Türkiye">Türkiye</option><option value="Turkmenistan">Turkmenistan</option><option value="Tuvalu">Tuvalu</option><option value="Uganda">Uganda</option><option value="Ukraine">Ukraine</option><option value="United Arab Emirates">United Arab Emirates</option><option value="United Kingdom">United Kingdom</option><option value="United States of America">United States of America</option><option value="Uruguay">Uruguay</option><option value="Uzbekistan">Uzbekistan</option><option value="Vanuatu">Vanuatu</option><option value="Vatican City">Vatican City</option><option value="Venezuela">Venezuela</option><option value="Vietnam">Vietnam</option><option value="Yemen">Yemen</option><option value="Zambia">Zambia</option><option value="Zimbabwe">Zimbabwe</option></optgroup></select></div>
+    <div><label>Nationality <span class="req">*</span></label>
+      <select id="d_nat"><option value="">Choose…</option><optgroup label="Tanzania and the region"><option value="Tanzania">Tanzania</option><option value="Kenya">Kenya</option><option value="Uganda">Uganda</option><option value="Rwanda">Rwanda</option><option value="Burundi">Burundi</option><option value="Zambia">Zambia</option><option value="Malawi">Malawi</option><option value="Mozambique">Mozambique</option><option value="Democratic Republic of the Congo">Democratic Republic of the Congo</option><option value="Ethiopia">Ethiopia</option><option value="South Sudan">South Sudan</option><option value="Somalia">Somalia</option></optgroup><optgroup label="All countries"><option value="Afghanistan">Afghanistan</option><option value="Albania">Albania</option><option value="Algeria">Algeria</option><option value="Andorra">Andorra</option><option value="Angola">Angola</option><option value="Antigua and Barbuda">Antigua and Barbuda</option><option value="Argentina">Argentina</option><option value="Armenia">Armenia</option><option value="Australia">Australia</option><option value="Austria">Austria</option><option value="Azerbaijan">Azerbaijan</option><option value="Bahamas">Bahamas</option><option value="Bahrain">Bahrain</option><option value="Bangladesh">Bangladesh</option><option value="Barbados">Barbados</option><option value="Belarus">Belarus</option><option value="Belgium">Belgium</option><option value="Belize">Belize</option><option value="Benin">Benin</option><option value="Bhutan">Bhutan</option><option value="Bolivia">Bolivia</option><option value="Bosnia and Herzegovina">Bosnia and Herzegovina</option><option value="Botswana">Botswana</option><option value="Brazil">Brazil</option><option value="Brunei">Brunei</option><option value="Bulgaria">Bulgaria</option><option value="Burkina Faso">Burkina Faso</option><option value="Burundi">Burundi</option><option value="Cabo Verde">Cabo Verde</option><option value="Cambodia">Cambodia</option><option value="Cameroon">Cameroon</option><option value="Canada">Canada</option><option value="Central African Republic">Central African Republic</option><option value="Chad">Chad</option><option value="Chile">Chile</option><option value="China">China</option><option value="Colombia">Colombia</option><option value="Comoros">Comoros</option><option value="Congo (Republic of)">Congo (Republic of)</option><option value="Costa Rica">Costa Rica</option><option value="Côte d&#39;Ivoire">Côte d'Ivoire</option><option value="Croatia">Croatia</option><option value="Cuba">Cuba</option><option value="Cyprus">Cyprus</option><option value="Czechia">Czechia</option><option value="Democratic Republic of the Congo">Democratic Republic of the Congo</option><option value="Denmark">Denmark</option><option value="Djibouti">Djibouti</option><option value="Dominica">Dominica</option><option value="Dominican Republic">Dominican Republic</option><option value="Ecuador">Ecuador</option><option value="Egypt">Egypt</option><option value="El Salvador">El Salvador</option><option value="Equatorial Guinea">Equatorial Guinea</option><option value="Eritrea">Eritrea</option><option value="Estonia">Estonia</option><option value="Eswatini">Eswatini</option><option value="Ethiopia">Ethiopia</option><option value="Fiji">Fiji</option><option value="Finland">Finland</option><option value="France">France</option><option value="Gabon">Gabon</option><option value="Gambia">Gambia</option><option value="Georgia">Georgia</option><option value="Germany">Germany</option><option value="Ghana">Ghana</option><option value="Greece">Greece</option><option value="Grenada">Grenada</option><option value="Guatemala">Guatemala</option><option value="Guinea">Guinea</option><option value="Guinea-Bissau">Guinea-Bissau</option><option value="Guyana">Guyana</option><option value="Haiti">Haiti</option><option value="Honduras">Honduras</option><option value="Hungary">Hungary</option><option value="Iceland">Iceland</option><option value="India">India</option><option value="Indonesia">Indonesia</option><option value="Iran">Iran</option><option value="Iraq">Iraq</option><option value="Ireland">Ireland</option><option value="Israel">Israel</option><option value="Italy">Italy</option><option value="Jamaica">Jamaica</option><option value="Japan">Japan</option><option value="Jordan">Jordan</option><option value="Kazakhstan">Kazakhstan</option><option value="Kenya">Kenya</option><option value="Kiribati">Kiribati</option><option value="Kuwait">Kuwait</option><option value="Kyrgyzstan">Kyrgyzstan</option><option value="Laos">Laos</option><option value="Latvia">Latvia</option><option value="Lebanon">Lebanon</option><option value="Lesotho">Lesotho</option><option value="Liberia">Liberia</option><option value="Libya">Libya</option><option value="Liechtenstein">Liechtenstein</option><option value="Lithuania">Lithuania</option><option value="Luxembourg">Luxembourg</option><option value="Madagascar">Madagascar</option><option value="Malawi">Malawi</option><option value="Malaysia">Malaysia</option><option value="Maldives">Maldives</option><option value="Mali">Mali</option><option value="Malta">Malta</option><option value="Marshall Islands">Marshall Islands</option><option value="Mauritania">Mauritania</option><option value="Mauritius">Mauritius</option><option value="Mexico">Mexico</option><option value="Micronesia">Micronesia</option><option value="Moldova">Moldova</option><option value="Monaco">Monaco</option><option value="Mongolia">Mongolia</option><option value="Montenegro">Montenegro</option><option value="Morocco">Morocco</option><option value="Mozambique">Mozambique</option><option value="Myanmar">Myanmar</option><option value="Namibia">Namibia</option><option value="Nauru">Nauru</option><option value="Nepal">Nepal</option><option value="Netherlands">Netherlands</option><option value="New Zealand">New Zealand</option><option value="Nicaragua">Nicaragua</option><option value="Niger">Niger</option><option value="Nigeria">Nigeria</option><option value="North Korea">North Korea</option><option value="North Macedonia">North Macedonia</option><option value="Norway">Norway</option><option value="Oman">Oman</option><option value="Pakistan">Pakistan</option><option value="Palau">Palau</option><option value="Palestine">Palestine</option><option value="Panama">Panama</option><option value="Papua New Guinea">Papua New Guinea</option><option value="Paraguay">Paraguay</option><option value="Peru">Peru</option><option value="Philippines">Philippines</option><option value="Poland">Poland</option><option value="Portugal">Portugal</option><option value="Qatar">Qatar</option><option value="Romania">Romania</option><option value="Russia">Russia</option><option value="Rwanda">Rwanda</option><option value="Saint Kitts and Nevis">Saint Kitts and Nevis</option><option value="Saint Lucia">Saint Lucia</option><option value="Saint Vincent and the Grenadines">Saint Vincent and the Grenadines</option><option value="Samoa">Samoa</option><option value="San Marino">San Marino</option><option value="São Tomé and Príncipe">São Tomé and Príncipe</option><option value="Saudi Arabia">Saudi Arabia</option><option value="Senegal">Senegal</option><option value="Serbia">Serbia</option><option value="Seychelles">Seychelles</option><option value="Sierra Leone">Sierra Leone</option><option value="Singapore">Singapore</option><option value="Slovakia">Slovakia</option><option value="Slovenia">Slovenia</option><option value="Solomon Islands">Solomon Islands</option><option value="Somalia">Somalia</option><option value="South Africa">South Africa</option><option value="South Korea">South Korea</option><option value="South Sudan">South Sudan</option><option value="Spain">Spain</option><option value="Sri Lanka">Sri Lanka</option><option value="Sudan">Sudan</option><option value="Suriname">Suriname</option><option value="Sweden">Sweden</option><option value="Switzerland">Switzerland</option><option value="Syria">Syria</option><option value="Tajikistan">Tajikistan</option><option value="Tanzania">Tanzania</option><option value="Thailand">Thailand</option><option value="Timor-Leste">Timor-Leste</option><option value="Togo">Togo</option><option value="Tonga">Tonga</option><option value="Trinidad and Tobago">Trinidad and Tobago</option><option value="Tunisia">Tunisia</option><option value="Türkiye">Türkiye</option><option value="Turkmenistan">Turkmenistan</option><option value="Tuvalu">Tuvalu</option><option value="Uganda">Uganda</option><option value="Ukraine">Ukraine</option><option value="United Arab Emirates">United Arab Emirates</option><option value="United Kingdom">United Kingdom</option><option value="United States of America">United States of America</option><option value="Uruguay">Uruguay</option><option value="Uzbekistan">Uzbekistan</option><option value="Vanuatu">Vanuatu</option><option value="Vatican City">Vatican City</option><option value="Venezuela">Venezuela</option><option value="Vietnam">Vietnam</option><option value="Yemen">Yemen</option><option value="Zambia">Zambia</option><option value="Zimbabwe">Zimbabwe</option></optgroup></select></div>
+    <div><label>Gender</label><select id="d_gender">
+      <option value="">Choose…</option><option>Female</option><option>Male</option>
+      <option>Non-binary</option><option>Prefer not to say</option></select></div>
+    <div><label>Highest qualification</label><select id="d_edu">
+      <option value="">Choose…</option><option>BSc</option><option>MSc</option>
+      <option>PhD</option><option>Other</option></select></div>
+    <div><label>Institution <span class="req">*</span></label><input type="text" id="d_inst"></div>
+    <div><label>Institution type</label><select id="d_itype">
+      <option value="">Choose…</option><option>University / research institute</option>
+      <option>Government / national statistics</option><option>NGO</option>
+      <option>Private sector</option><option>Other</option></select></div>
+    <div><label>Your role <span class="req">*</span></label><input type="text" id="d_role"></div>
+  </div>
+  <div id="e0" class="err" style="display:none"></div>
+  <div class="actions"><button class="btn" id="go0">Continue</button></div></div>
+  <div class="foot">Ifakara Health Institute · Malaria Atlas Project</div>
+</div>
+
+<script>
+/* ============================================================================
+   CONFIGURATION — edit these three things and nothing else
+   ========================================================================= */
+const CONFIG = {
+  // Where completed applications are POSTed as JSON.
+  // Leave empty ("") and every applicant downloads a .json file to email you.
+  // Works with Formspree, Basin, a Google Apps Script web app, or your own API.
+  SUBMIT_ENDPOINT: "",
+
+  CONTACT_EMAIL: "cmyalla@ihi.or.tz",
+  DEADLINE: "Friday 28 August 2026",
+
+  // No participant funding is available. With FUNDING_GATE true, an applicant who says they
+  // cannot attend without support is told so immediately rather than completing a 15-minute
+  // application we could not honour. Set to false to let them apply anyway, flagged
+  // UNFUNDED in the panel, if you would rather make that call yourself case by case.
+  FUNDING_GATE: true,
+
+  // Number of questions drawn per category. Total must stay reasonable (~14).
+  QUOTA: { R:3, SPATIAL:5, STATS:3, BAYES:2, HEALTH:1 }
+};
+
+/* ============================================================================
+   QUESTION BANK
+   Each applicant receives a random draw from this bank with options shuffled,
+   so answers cannot circulate between applicants from the same institution.
+   `secs` is tuned to reading load: short recall 35s, scenario + reasoning 45–50s.
+   To add a question, copy any object below. `ans` is the index of the correct
+   option AS WRITTEN here — shuffling is handled automatically.
+   ========================================================================= */
+const BANK = [
+/* ---- R ------------------------------------------------------------------ */
+{id:"r1",cat:"R",secs:35,
+ stem:"What does this return?",
+ code:"x <- c(2, 4, 6, NA)\nmean(x) > 4",
+ opts:["TRUE","FALSE","NA","Error"],ans:2},
+
+{id:"r2",cat:"R",secs:40,
+ stem:"A data frame d has 100 rows and two columns: district (10 unique values) and cases. How many rows does the result have?",
+ code:"d %>% group_by(district) %>% mutate(total = sum(cases))",
+ opts:["10","100","1","110"],ans:1},
+
+{id:"r3",cat:"R",secs:40,
+ stem:"A data frame v has one row per village. What does this return?",
+ code:"nrow(v[v$region == \"Dodoma\" & v$cases > 0, ])",
+ opts:["The number of Dodoma villages with at least one case",
+       "The number of villages in Dodoma",
+       "The total cases in Dodoma",
+       "All villages with cases, in any region"],ans:0},
+
+{id:"r4",cat:"R",secs:40,
+ stem:"A column was read in from CSV and contains \"1,240\" for one district. What happens?",
+ code:"class(d$cases)\n# [1] \"character\"\nsum(d$cases)",
+ opts:["Returns the total, ignoring the comma",
+       "Returns an error, because the column is not numeric",
+       "Returns NA",
+       "Returns the values pasted together as text"],ans:1},
+
+{id:"r5",cat:"R",secs:45,
+ stem:"Table a has 200 rows, one per household. Table b has 240 rows, with some households appearing twice. How many rows will the join return?",
+ code:"left_join(a, b, by = \"household_id\")",
+ opts:["200","240","More than 200, because duplicated matches expand rows",
+       "440"],ans:2},
+
+/* ---- SPATIAL ------------------------------------------------------------ */
+{id:"s1",cat:"SPATIAL",secs:45,
+ stem:"Your survey points are stored in EPSG:4326 (longitude / latitude). You run st_buffer(points, 5) intending a 5 km buffer. What do you actually get?",
+ opts:["A 5 km buffer as intended","A 5 metre buffer","A buffer of 5 degrees",
+       "An error, because buffering needs a projected CRS"],ans:2},
+
+{id:"s2",cat:"SPATIAL",secs:45,
+ stem:"You overlay survey points on a district boundary layer. The points plot correctly; the boundaries appear thousands of kilometres away. Both layers have a CRS assigned. Most likely explanation?",
+ opts:["The boundary file is corrupted",
+       "The points have too few decimal places",
+       "The layers must be merged into one object before plotting",
+       "The two CRSs differ, so the coordinates refer to different systems"],ans:3},
+
+{id:"s3",cat:"SPATIAL",secs:40,
+ stem:"You extract elevation values from a raster to 500 survey points and get NA for about a third of them. Most likely cause?",
+ opts:["The raster resolution is too coarse",
+       "The points and raster are in different CRSs, or some points fall outside the raster extent",
+       "There are too many points to extract at once",
+       "Elevation values below sea level return NA"],ans:1},
+
+{id:"s4",cat:"SPATIAL",secs:40,
+ stem:"You have prevalence measured at 60 survey clusters and want a continuous prevalence surface for the whole country. What is the core statistical challenge?",
+ opts:["Converting the 60 points into a shapefile",
+       "That 60 points is too few to calculate a national mean",
+       "Predicting at unobserved locations by borrowing strength from nearby observations",
+       "Ensuring all points use WGS84"],ans:2},
+
+{id:"s5",cat:"SPATIAL",secs:50,
+ stem:"The same household survey is aggregated two ways. At ward level the association between poverty and disease looks strong; at district level it looks weak. Which statement is correct?",
+ opts:["The district result is more reliable, because larger units average out noise",
+       "The ward result is more reliable, because there are more units",
+       "The difference means there is an error in the data",
+       "The strength of association depends on the units used, so conclusions must state the spatial scale"],ans:3},
+
+{id:"s6",cat:"SPATIAL",secs:45,
+ stem:"You fit a standard GLM with no spatial term. The residuals turn out to be strongly clustered in space. What is the most important consequence?",
+ opts:["The coefficient estimates are biased upward",
+       "The model cannot generate predictions",
+       "Standard errors are too small, so effects look more significant than they are",
+       "The R-squared value is invalid"],ans:2},
+
+{id:"s7",cat:"SPATIAL",secs:45,
+ stem:"You have 3,000 survey points and 184 district polygons, and need a count of points falling inside each district. Both layers share a CRS. What is the operation you need?",
+ opts:["A spatial join, testing which polygon contains each point",
+       "Merging the two tables on a shared ID column",
+       "Rasterising both layers to a common grid first",
+       "Computing the distance from each point to each district centroid"],ans:0},
+
+/* ---- STATS -------------------------------------------------------------- */
+{id:"t1",cat:"STATS",secs:40,
+ stem:"You have repeated observations from 30 villages. You include village as a random effect rather than a fixed effect mainly because:",
+ opts:["It is faster to compute",
+       "It accounts for correlation within villages and shares information across them",
+       "Random effects always fit the data better",
+       "Fixed effects cannot be used with categorical variables"],ans:1},
+
+{id:"t2",cat:"STATS",secs:40,
+ stem:"You compare two models and obtain DIC values of 148.2 and 147.9. What should you conclude?",
+ opts:["The second model is clearly better",
+       "The first is better, because higher DIC means more explained variation",
+       "DIC cannot be used to compare these models",
+       "The difference is too small to prefer either; decide on other grounds"],ans:3},
+
+{id:"t3",cat:"STATS",secs:50,
+ stem:"You model counts of reported cases across 184 districts, whose populations range from 12,000 to 4.1 million. You fit a Poisson model with a log link using raw case counts as the response and no other adjustment. What is the main problem?",
+ opts:["Nothing — Poisson with a log link is correct for count data",
+       "A Gaussian model should be used because the counts are large",
+       "Without an offset for population at risk, the model largely reproduces population size rather than disease risk",
+       "The log link should be replaced with an identity link"],ans:2},
+
+{id:"t4",cat:"STATS",secs:45,
+ stem:"Case counts across districts have a mean of 47 and a variance of 890. You fit a standard Poisson GLM. What should you expect?",
+ opts:["A good fit, since Poisson is designed for counts",
+       "Standard errors that are too small, making covariates look more significant than they are",
+       "Coefficient estimates biased toward zero",
+       "The model will fail to converge"],ans:1},
+
+{id:"t5",cat:"STATS",secs:45,
+ stem:"A model is fitted on survey data collected in 2018–2022 and used to predict prevalence for 2027. What is the main caution?",
+ opts:["Predictions extrapolate beyond the observed period, so uncertainty is understated",
+       "The model cannot produce predictions for future dates",
+       "Prevalence must first be converted to counts",
+       "Nothing, provided the model fitted well"],ans:0},
+
+/* ---- BAYES -------------------------------------------------------------- */
+{id:"b1",cat:"BAYES",secs:45,
+ stem:"You have only 12 observations and use a strongly informative prior. Compared with using a vague prior, the posterior will be:",
+ opts:["Identical, because the data always dominates",
+       "Pulled toward the prior, but wider",
+       "Unaffected, because priors only matter for large samples",
+       "Pulled toward the prior, and narrower"],ans:3},
+
+{id:"b2",cat:"BAYES",secs:50,
+ stem:"A model gives a 95% credible interval for prevalence of [0.12, 0.18]. Which interpretation is correct?",
+ opts:["If we repeated the survey many times, 95% of such intervals would contain the true value",
+       "Given the model and data, there is a 95% probability the true prevalence lies in this range",
+       "95% of the surveyed individuals have prevalence values in this range",
+       "The estimate is correct 95% of the time"],ans:1},
+
+{id:"b3",cat:"BAYES",secs:40,
+ stem:"You keep the same prior but increase the sample size from 100 to 10,000 observations. The influence of the prior on the posterior will:",
+ opts:["Increase, because there is more information to weight",
+       "Stay the same, because the prior is fixed",
+       "Decrease, because the likelihood increasingly dominates",
+       "Become impossible to determine"],ans:2},
+
+{id:"b4",cat:"BAYES",secs:45,
+ stem:"For the same fitted model, you compute a 95% interval for the mean prevalence at a location, and a 95% interval for a new observation at that location. How do they compare?",
+ opts:["They are identical",
+       "The interval for a new observation is wider, because it adds observation-level variability",
+       "The interval for the mean is wider, because it averages more values",
+       "Neither can be computed without refitting"],ans:1},
+
+/* ---- HEALTH ------------------------------------------------------------- */
+{id:"h1",cat:"HEALTH",secs:45,
+ stem:"A national dataset records malaria cases diagnosed at health facilities. If you map raw case counts by location, what will the map mostly show?",
+ opts:["The true geographic distribution of disease burden",
+       "Population density alone",
+       "Where people access health facilities, rather than where infection occurs",
+       "Seasonal variation in transmission"],ans:2},
+
+{id:"h2",cat:"HEALTH",secs:45,
+ stem:"District A tests 200 people and finds 60 positive. District B tests 4,000 and finds 800 positive. A colleague concludes District A has the higher burden of disease. What is the problem?",
+ opts:["Test positivity depends on who gets tested, so it is not a measure of population burden",
+       "District B has more cases, so it clearly has higher burden",
+       "The percentages should be compared, not the counts",
+       "Nothing — 30% is higher than 20%"],ans:0},
+
+{id:"h3",cat:"HEALTH",secs:40,
+ stem:"You aggregate a fine-scale prevalence surface to district averages for a national report. What is mainly lost?",
+ opts:["Nothing, provided the averages are population-weighted",
+       "The coordinate reference system",
+       "Localised hotspots, which are averaged away within districts",
+       "The ability to compute uncertainty"],ans:2}
+];
+
+/* ============================================================================
+   COUNTRY LIST — dropdowns rather than free text, so "Tanzania", "tanzania" and
+   "United Republic of Tanzania" cannot all appear in the same export. The panel
+   matches Tanzania-based applicants on an exact string, so this also makes the
+   diversity floors reliable.
+   ========================================================================= */
+const NEARBY = ["Tanzania","Kenya","Uganda","Rwanda","Burundi","Zambia","Malawi",
+  "Mozambique","Democratic Republic of the Congo","Ethiopia","South Sudan","Somalia"];
+
+const COUNTRIES = ["Afghanistan","Albania","Algeria","Andorra","Angola","Antigua and Barbuda",
+"Argentina","Armenia","Australia","Austria","Azerbaijan","Bahamas","Bahrain","Bangladesh",
+"Barbados","Belarus","Belgium","Belize","Benin","Bhutan","Bolivia","Bosnia and Herzegovina",
+"Botswana","Brazil","Brunei","Bulgaria","Burkina Faso","Burundi","Cabo Verde","Cambodia",
+"Cameroon","Canada","Central African Republic","Chad","Chile","China","Colombia","Comoros",
+"Congo (Republic of)","Costa Rica","Côte d'Ivoire","Croatia","Cuba","Cyprus","Czechia",
+"Democratic Republic of the Congo","Denmark","Djibouti","Dominica","Dominican Republic",
+"Ecuador","Egypt","El Salvador","Equatorial Guinea","Eritrea","Estonia","Eswatini","Ethiopia",
+"Fiji","Finland","France","Gabon","Gambia","Georgia","Germany","Ghana","Greece","Grenada",
+"Guatemala","Guinea","Guinea-Bissau","Guyana","Haiti","Honduras","Hungary","Iceland","India",
+"Indonesia","Iran","Iraq","Ireland","Israel","Italy","Jamaica","Japan","Jordan","Kazakhstan",
+"Kenya","Kiribati","Kuwait","Kyrgyzstan","Laos","Latvia","Lebanon","Lesotho","Liberia","Libya",
+"Liechtenstein","Lithuania","Luxembourg","Madagascar","Malawi","Malaysia","Maldives","Mali",
+"Malta","Marshall Islands","Mauritania","Mauritius","Mexico","Micronesia","Moldova","Monaco",
+"Mongolia","Montenegro","Morocco","Mozambique","Myanmar","Namibia","Nauru","Nepal",
+"Netherlands","New Zealand","Nicaragua","Niger","Nigeria","North Korea","North Macedonia",
+"Norway","Oman","Pakistan","Palau","Palestine","Panama","Papua New Guinea","Paraguay","Peru",
+"Philippines","Poland","Portugal","Qatar","Romania","Russia","Rwanda","Saint Kitts and Nevis",
+"Saint Lucia","Saint Vincent and the Grenadines","Samoa","San Marino","São Tomé and Príncipe",
+"Saudi Arabia","Senegal","Serbia","Seychelles","Sierra Leone","Singapore","Slovakia","Slovenia",
+"Solomon Islands","Somalia","South Africa","South Korea","South Sudan","Spain","Sri Lanka",
+"Sudan","Suriname","Sweden","Switzerland","Syria","Tajikistan","Tanzania","Thailand",
+"Timor-Leste","Togo","Tonga","Trinidad and Tobago","Tunisia","Türkiye","Turkmenistan","Tuvalu",
+"Uganda","Ukraine","United Arab Emirates","United Kingdom","United States of America",
+"Uruguay","Uzbekistan","Vanuatu","Vatican City","Venezuela","Vietnam","Yemen","Zambia",
+"Zimbabwe"];
+
+/* Options markup: East Africa and neighbours first, then the full alphabetical list. */
+function countryOptions(){
+  const opt = c => `<option value="${c}">${c}</option>`;
+  return `<option value="">Choose…</option>` +
+    `<optgroup label="Tanzania and the region">${NEARBY.map(opt).join("")}</optgroup>` +
+    `<optgroup label="All countries">${COUNTRIES.map(opt).join("")}</optgroup>`;
+}
+
+/* Overclaiming grid — 8 real functions, 4 that do not exist.
+   Claiming a non-existent function is the single most informative signal
+   in the whole instrument, and it marks itself. */
+const CLAIM_REAL = ["read.csv","group_by","ggplot","glm","st_read","st_transform","rast","predict"];
+const CLAIM_FAKE = ["st_reproject","read.shapefile","spatial_join_df","raster_scale2"];
+
+/* ============================================================================
+   STATE
+   ========================================================================= */
+const S = {
+  step:0, details:{}, elig:{}, exp:{}, claim:{}, written:{},
+  quiz:[], qi:0, answers:[], startedAt:null, quizStart:null, timer:null, remaining:0
+};
+const STEPS = ["Details","Eligibility","Experience","Honesty check","Knowledge check","Your work","Submit"];
+
+const el = id => document.getElementById(id);
+const esc = s => String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+function shuffle(a){a=a.slice();for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];}return a;}
+function store(k,v){try{localStorage.setItem(k,v);}catch(e){}}
+function recall(k){try{return localStorage.getItem(k);}catch(e){return null;}}
+
+function renderSteps(){
+  el("steps").innerHTML = STEPS.map((s,i)=>
+    `<li class="${i===S.step?"on":(i<S.step?"done":"")}">${i+1}. ${s}</li>`).join("");
+}
+function go(n){ S.step=n; renderSteps(); window.scrollTo(0,0); RENDER[n](); }
+
+/* ============================================================================
+   STEP 0 — DETAILS
+   ========================================================================= */
+function stepDetails(){
+  el("stage").innerHTML = `
+  <h1>Apply to the workshop</h1>
+  <p class="lead">Spatial and spatio-temporal modelling with <code class="inline">inlabru</code>,
+  taught by Prof. Janine Illian, with seminars on spatial disaggregation and from the
+  National Bureau of Statistics, Tanzania. Dodoma, 15–18 September 2026.</p>
+
+  <div class="warnbox"><strong>Before you begin — costs.</strong> There is no fee to attend,
+  but <strong>we are not able to fund any participant's travel, accommodation or subsistence</strong>.
+  Participants must cover these themselves or through their institution. We have no bursaries
+  and no partial support, and this will not change. Please only apply if you can realistically
+  get to Dodoma for 15–18 September.</div>
+
+  <div class="note"><strong>What to expect.</strong> About 15 minutes in total: a few
+  questions about your background, a short timed knowledge check, and three brief written
+  answers. <strong>You do not need any prior knowledge of INLA or inlabru</strong> — those are
+  what we will teach. Applications close ${CONFIG.DEADLINE}.</div>
+
+  <h2>Your details</h2>
+  <div class="grid2">
+    <div><label>First name <span class="req">*</span></label><input type="text" id="d_first"></div>
+    <div><label>Last name <span class="req">*</span></label><input type="text" id="d_last"></div>
+    <div><label>Email <span class="req">*</span></label><input type="email" id="d_email">
+      <p class="hint">An institutional address is preferred where you have one.</p></div>
+    <div><label>WhatsApp number — including country code <span class="req">*</span></label>
+      <input type="tel" id="d_phone" placeholder="+255 712 345 678">
+      <p class="hint">We use WhatsApp for practical updates before and during the workshop.
+      Start with <strong>+</strong> and your country code — for example +255 for Tanzania,
+      +254 Kenya, +256 Uganda, +44 UK.</p></div>
+    <div><label>Country of residence <span class="req">*</span></label>
+      <select id="d_country">${countryOptions()}</select></div>
+    <div><label>Nationality <span class="req">*</span></label>
+      <select id="d_nat">${countryOptions()}</select></div>
+    <div><label>Gender</label><select id="d_gender">
+      <option value="">Choose…</option><option>Female</option><option>Male</option>
+      <option>Non-binary</option><option>Prefer not to say</option></select></div>
+    <div><label>Highest qualification</label><select id="d_edu">
+      <option value="">Choose…</option><option>BSc</option><option>MSc</option>
+      <option>PhD</option><option>Other</option></select></div>
+    <div><label>Institution <span class="req">*</span></label><input type="text" id="d_inst"></div>
+    <div><label>Institution type</label><select id="d_itype">
+      <option value="">Choose…</option><option>University / research institute</option>
+      <option>Government / national statistics</option><option>NGO</option>
+      <option>Private sector</option><option>Other</option></select></div>
+    <div><label>Your role <span class="req">*</span></label><input type="text" id="d_role"></div>
+  </div>
+  <div id="e0" class="err" style="display:none"></div>
+  <div class="actions"><button class="btn" id="go0">Continue</button></div>`;
+
+  el("go0").onclick = () => {
+    const g = id => el(id).value.trim();
+    const d = {first:g("d_first"),last:g("d_last"),email:g("d_email"),whatsapp:g("d_phone"),
+      country:g("d_country"),nationality:g("d_nat"),gender:g("d_gender"),education:g("d_edu"),
+      institution:g("d_inst"),instType:g("d_itype"),role:g("d_role")};
+    const miss = [];
+    if(!d.first) miss.push("first name"); if(!d.last) miss.push("last name");
+    if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(d.email)) miss.push("a valid email");
+    // Require a leading + so the country code is unambiguous. Without it, a local number
+    // like 0712345678 looks valid but cannot be dialled from outside the country.
+    if(!/^\+[\d][\d\s().-]{7,}$/.test(d.whatsapp) || (d.whatsapp.match(/\d/g)||[]).length < 8)
+      miss.push("a WhatsApp number starting with + and your country code (e.g. +255…)");
+    if(!d.country) miss.push("country of residence");
+    if(!d.nationality) miss.push("nationality");
+    if(!d.institution) miss.push("institution");
+    if(!d.role) miss.push("role");
+    if(miss.length){ el("e0").style.display="block";
+      el("e0").textContent = "Please provide: " + miss.join(", ") + "."; return; }
+    S.details = d; S.startedAt = new Date().toISOString(); go(1);
+  };
+}
+
+/* ============================================================================
+   STEP 1 — ELIGIBILITY GATES
+   ========================================================================= */
+function stepElig(){
+  const q = (id,text,opts) => `<label>${text} <span class="req">*</span></label>
+    <select id="${id}"><option value="">Choose…</option>
+    ${opts.map(o=>`<option>${o}</option>`).join("")}</select>`;
+  el("stage").innerHTML = `
+  <h1>Eligibility</h1>
+  <p class="lead">Four practical questions. Please answer accurately — a place you cannot
+  take up is a place another applicant could have used.</p>
+  ${q("g_attend","Can you attend in person in Dodoma for all four days, 15–18 September 2026?",
+      ["Yes, all four days","Only part of the period","No"])}
+  ${q("g_laptop","Will you bring a laptop on which you can install software (R, RStudio, INLA)?",
+      ["Yes","No","I am not sure"])}
+  ${q("g_data","Do you have access to spatial data you could analyse?",
+      ["Yes, I work with it now","Not yet, but I expect to within six months","No"])}
+  ${q("g_fund","Travel and accommodation are not funded by the workshop. How will yours be covered?",
+      ["My institution has agreed to cover it",
+       "I will cover it myself",
+       "Likely covered, but not yet confirmed",
+       "I could not attend without financial support"])}
+  <div class="note">Please answer this one accurately rather than optimistically. A place
+  offered to someone who cannot travel is a place lost to another applicant, and we release
+  seats only once, shortly before the workshop.</div>
+  <div id="e1" class="err" style="display:none"></div>
+  <div class="actions"><button class="btn" id="go1">Continue</button></div>`;
+
+  el("go1").onclick = () => {
+    const v = id => el(id).value;
+    const e = {attend:v("g_attend"),laptop:v("g_laptop"),data:v("g_data"),funding:v("g_fund")};
+    if(Object.values(e).some(x=>!x)){ el("e1").style.display="block";
+      el("e1").textContent="Please answer all four questions."; return; }
+    S.elig = e;
+    const stop = (title, msg) => {
+      el("stage").innerHTML = `<h1>${title}</h1>${msg}
+      <p>We expect to run further courses, and we are working on funded places for future
+      rounds. Please write to <strong>${CONFIG.CONTACT_EMAIL}</strong> to be added to the
+      mailing list so we can tell you when the next one opens.</p>`;
+      el("steps").innerHTML="";
+    };
+    if(e.attend==="No" || e.data==="No"){
+      stop("Thank you for your interest",
+      `<p>This workshop is a four-day in-person course built around participants' own spatial
+       data, so we are not able to consider applications from people who cannot attend the
+       full period or who do not expect to work with spatial data.</p>`); return;
+    }
+    if(CONFIG.FUNDING_GATE && e.funding==="I could not attend without financial support"){
+      stop("We are sorry — we cannot support travel costs",
+      `<p>We have no funding at all for participant travel, accommodation or subsistence for
+       this workshop, and no way to create any before September. We would rather tell you
+       plainly now than have you spend fifteen minutes on an application we could not
+       honour.</p>
+       <p>This is a limitation of our budget, not a judgement on your application.</p>`);
+      return;
+    }
+    go(2);
+  };
+}
+
+/* ============================================================================
+   STEP 2 — EXPERIENCE, RELEVANCE AND IMPACT (structured, auto-scored)
+   ========================================================================= */
+function stepExp(){
+  const sel = (id,text,opts,hint) => `<label>${text} <span class="req">*</span></label>
+    <select id="${id}"><option value="">Choose…</option>
+    ${opts.map(o=>`<option>${o}</option>`).join("")}</select>
+    ${hint?`<p class="hint">${hint}</p>`:""}`;
+  el("stage").innerHTML = `
+  <h1>Your experience and plans</h1>
+  <p class="lead">These answers help us judge whether the course suits your current work.
+  Answer honestly — the course caters for a range of backgrounds and there is no advantage
+  in overstating.</p>
+
+  <h2>Working with R</h2>
+  ${sel("x_rfreq","How often do you currently write or run R code yourself?",
+    ["Most weeks","Most months","A few times a year","Rarely or never"])}
+  ${sel("x_rself","How would you describe your own R skills?",
+    ["Beginner — I can run scripts others have written",
+     "Intermediate — I write my own analysis scripts",
+     "Advanced — I write functions and packages"])}
+  ${sel("x_bayes","How would you describe your familiarity with Bayesian methods?",
+    ["None","Beginner","Intermediate","Advanced"])}
+  ${sel("x_glm","Have you fitted a regression or GLM yourself in the past two years?",
+    ["Yes, several times","Yes, once or twice","No"])}
+
+  <h2>Your data</h2>
+  ${sel("x_dtype","Which best describes the spatial data you work with, or expect to?",
+    ["Survey or sampling points with coordinates",
+     "Counts or rates aggregated to districts, wards or facilities",
+     "Raster or gridded environmental data",
+     "Locations of events or cases (point patterns)",
+     "A mixture of these",
+     "None yet"])}
+  ${sel("x_when","When would you next apply these methods to your own data?",
+    ["I have an analysis waiting for these methods now",
+     "Within six months","Within a year","No specific plan yet"])}
+
+  <h2>After the workshop</h2>
+  ${sel("x_share","Would you run an internal session to pass on what you learn to colleagues?",
+    ["Yes, and I have a specific team in mind",
+     "Yes, in principle","Possibly","No"])}
+  ${sel("x_use","Does your current role involve producing analyses that other people use for decisions?",
+    ["Yes, regularly","Sometimes","No"])}
+  <div id="e2" class="err" style="display:none"></div>
+  <div class="actions"><button class="btn" id="go2">Continue</button></div>`;
+
+  el("go2").onclick = () => {
+    const ids=["x_rfreq","x_rself","x_bayes","x_glm","x_dtype","x_when","x_share","x_use"];
+    const o={}; ids.forEach(i=>o[i.slice(2)]=el(i).value);
+    if(Object.values(o).some(v=>!v)){ el("e2").style.display="block";
+      el("e2").textContent="Please answer every question."; return; }
+    S.exp=o; go(3);
+  };
+}
+
+/* ============================================================================
+   STEP 3 — OVERCLAIMING GRID
+   ========================================================================= */
+function stepClaim(){
+  const rows = shuffle(CLAIM_REAL.concat(CLAIM_FAKE));
+  el("stage").innerHTML = `
+  <h1>Honesty check</h1>
+  <p class="lead">Which of these R functions have you used <em>yourself</em>?</p>
+  <div class="warnbox"><strong>Please read.</strong> Some of the names below are not real R
+  functions. Claiming one costs you more than admitting you do not know it. We are not
+  expecting anyone to know all of them — an accurate picture helps us support you better.</div>
+  <table class="claim">
+    <tr><th>Function</th><th>Used it myself</th><th>Heard of it</th><th>Don't know it</th></tr>
+    ${rows.map((f,i)=>`<tr><td>${esc(f)}()</td>
+      ${["used","heard","no"].map(v=>`<td><input type="radio" name="c${i}" value="${v}"></td>`).join("")}
+      </tr>`).join("")}
+  </table>
+  <div id="e3" class="err" style="display:none"></div>
+  <div class="actions"><button class="btn" id="go3">Continue</button></div>`;
+
+  el("go3").onclick = () => {
+    const out={}; let missing=false;
+    rows.forEach((f,i)=>{
+      const r=document.querySelector(`input[name=c${i}]:checked`);
+      if(!r){missing=true;} else out[f]=r.value;
+    });
+    if(missing){ el("e3").style.display="block";
+      el("e3").textContent="Please answer for every function."; return; }
+    S.claim=out; go(4);
+  };
+}
+
+/* ============================================================================
+   STEP 4 — TIMED KNOWLEDGE CHECK
+   ========================================================================= */
+function drawQuiz(){
+  const out=[];
+  for(const [cat,n] of Object.entries(CONFIG.QUOTA)){
+    const pool = shuffle(BANK.filter(q=>q.cat===cat));
+    out.push(...pool.slice(0,n));
+  }
+  return shuffle(out).map(q=>{
+    const idx = shuffle(q.opts.map((_,i)=>i));           // display order
+    return { ...q, order: idx, correctPos: idx.indexOf(q.ans) };
+  });
+}
+
+function stepQuizIntro(){
+  if(recall("workshop_quiz_done")==="1"){
+    el("stage").innerHTML = `<h1>Knowledge check already completed</h1>
+    <p>Our records on this device show the knowledge check has already been taken. It can only
+    be attempted once. If you believe this is an error, please write to
+    <strong>${CONFIG.CONTACT_EMAIL}</strong>.</p>`; return;
+  }
+  const total = Object.values(CONFIG.QUOTA).reduce((a,b)=>a+b,0);
+  el("stage").innerHTML = `
+  <h1>Knowledge check</h1>
+  <p class="lead">${total} questions, one at a time.</p>
+  <ul class="tight">
+    <li>Each question has its own countdown, shown as a bar. Longer questions get more time.</li>
+    <li>You cannot go back, and the check cannot be restarted.</li>
+    <li>If the time runs out, the question is marked unanswered and you move on.</li>
+    <li>Everyone receives a different selection of questions.</li>
+  </ul>
+  <div class="note"><strong>You are not expected to score full marks.</strong> Nothing here
+  requires prior knowledge of INLA or inlabru. Answer from what you know — please do not look
+  things up, as an accurate picture is what helps us build a workable group.</div>
+  <div class="actions"><button class="btn" id="startq">Start the knowledge check</button></div>`;
+  el("startq").onclick = () => {
+    S.quiz = drawQuiz(); S.qi=0; S.answers=[]; S.quizStart=Date.now();
+    store("workshop_quiz_done","1"); renderQ();
+  };
+}
+
+function renderQ(){
+  clearInterval(S.timer);
+  if(S.qi >= S.quiz.length){ go(5); return; }
+  const q = S.quiz[S.qi];
+  S.remaining = q.secs;
+  el("stage").innerHTML = `
+  <div class="qmeta"><span>Question ${S.qi+1} of ${S.quiz.length}</span>
+    <span id="clk">${q.secs}s</span></div>
+  <div class="bar" id="bar"><i id="barfill"></i></div>
+  <p class="qstem">${esc(q.stem)}</p>
+  ${q.code?`<pre class="code">${esc(q.code)}</pre>`:""}
+  <div id="opts">
+    ${q.order.map((oi,pos)=>`<label class="opt" data-pos="${pos}">
+      <input type="radio" name="q" value="${pos}">${esc(q.opts[oi])}</label>`).join("")}
+  </div>
+  <div class="actions"><button class="btn" id="sub" disabled>Submit answer</button></div>`;
+
+  document.querySelectorAll(".opt").forEach(l=>{
+    l.onclick = () => {
+      document.querySelectorAll(".opt").forEach(x=>x.classList.remove("sel"));
+      l.classList.add("sel"); el("sub").disabled=false;
+    };
+  });
+  el("sub").onclick = () => {
+    const r = document.querySelector("input[name=q]:checked");
+    record(r ? Number(r.value) : null);
+  };
+  const fill = el("barfill"), bar = el("bar");
+  fill.style.width = "100%";
+  S.timer = setInterval(()=>{
+    S.remaining--;
+    const pct = Math.max(0, S.remaining / q.secs * 100);
+    fill.style.width = pct + "%";
+    el("clk").textContent = Math.max(0,S.remaining) + "s";
+    bar.className = "bar" + (S.remaining<=5?" crit":(S.remaining<=10?" low":""));
+    if(S.remaining<=0){ record(null); }
+  },1000);
+}
+
+function record(pos){
+  clearInterval(S.timer);
+  const q = S.quiz[S.qi];
+  S.answers.push({ id:q.id, cat:q.cat, answered: pos!==null,
+    correct: pos!==null && pos===q.correctPos, secsAllowed:q.secs,
+    secsUsed: q.secs - Math.max(0,S.remaining) });
+  S.qi++; renderQ();
+}
+
+/* ============================================================================
+   STEP 5 — WRITTEN (collected, read only for the shortlist)
+   ========================================================================= */
+function stepWritten(){
+  const score = computeScore();
+  el("stage").innerHTML = `
+  <h1>Your own work</h1>
+  <p class="lead">Three short answers. These are read by the selection panel for
+  shortlisted applicants — please answer in your own words.</p>
+
+  <label>1. Describe a dataset you have personally analysed <span class="req">*</span></label>
+  <p class="hint">Say what one row represents, roughly how many rows, the time period, and how
+  location is recorded (GPS coordinates, district names, a grid, or something else). About 80 words.</p>
+  <textarea id="w1" maxlength="900"></textarea>
+
+  <label>2. Paste 5–15 lines of R code that you wrote yourself in the past year <span class="req">*</span></label>
+  <p class="hint">Any code at all — cleaning, plotting, modelling. Add one line saying what it was
+  for. If you have never written R code, write “none” — this will not disqualify you.</p>
+  <textarea id="w2" maxlength="1600" style="font-family:ui-monospace,Consolas,monospace;font-size:14px;min-height:150px"></textarea>
+
+  <label>3. What is one feature of your own data that would make an ordinary linear regression a poor choice? <span class="req">*</span></label>
+  <p class="hint">About 40 words.</p>
+  <textarea id="w3" maxlength="500"></textarea>
+
+  <label>4. Anything else the panel should know?</label>
+  <textarea id="w4" maxlength="600"></textarea>
+  <div id="e5" class="err" style="display:none"></div>
+  <div class="actions"><button class="btn" id="go5">Continue to submit</button></div>`;
+
+  el("go5").onclick = () => {
+    const g=id=>el(id).value.trim();
+    const w={dataset:g("w1"),code:g("w2"),whyNotOls:g("w3"),other:g("w4")};
+    if(w.dataset.length<25 || w.code.length<3 || w.whyNotOls.length<15){
+      el("e5").style.display="block";
+      el("e5").textContent="Please complete questions 1 to 3 (a sentence or two is enough)."; return;
+    }
+    S.written=w; go(6);
+  };
+}
+
+/* ============================================================================
+   SCORING  — composite out of 100, computed here and recomputed by the panel
+   ========================================================================= */
+function computeScore(){
+  // 1. Knowledge check — 45 points
+  const n = S.answers.length || 1;
+  const correct = S.answers.filter(a=>a.correct).length;
+  const quiz = correct / n * 45;
+
+  // 2. Honesty — 20 points. Fake claims are heavily penalised.
+  let raw=0, bluff=0;
+  for(const [f,v] of Object.entries(S.claim)){
+    const fake = CLAIM_FAKE.includes(f);
+    if(fake && (v==="used"||v==="heard")){ raw-=3; if(v==="used") bluff++; }
+    if(!fake && v==="used") raw+=1;
+  }
+  const honesty = Math.max(0, Math.min(raw, CLAIM_REAL.length)) / CLAIM_REAL.length * 20;
+
+  // 3. Readiness and relevance — 20 points
+  // Includes whether real R code was supplied: machine-detectable, and the single
+  // strongest predictor of coping with the practicals.
+  const P = (v,map) => map[v] ?? 0;
+  const codeTxt = (S.written.code||"").trim();
+  const hasCode = codeTxt.length >= 20 && !/^none$/i.test(codeTxt);
+  const relevance =
+    P(S.exp.rfreq,{"Most weeks":6,"Most months":4,"A few times a year":2,"Rarely or never":0}) +
+    P(S.exp.glm,{"Yes, several times":4,"Yes, once or twice":2,"No":0}) +
+    P(S.elig.data,{"Yes, I work with it now":3,"Not yet, but I expect to within six months":1,"No":0}) +
+    P(S.exp.when,{"I have an analysis waiting for these methods now":3,"Within six months":2,
+                  "Within a year":1,"No specific plan yet":0}) +
+    (hasCode ? 4 : 0);
+
+  // 4. Likely impact — 15 points
+  const impact =
+    P(S.exp.share,{"Yes, and I have a specific team in mind":7,"Yes, in principle":5,"Possibly":2,"No":0}) +
+    P(S.exp.use,{"Yes, regularly":5,"Sometimes":3,"No":0}) +
+    P(S.exp.dtype,{"None yet":0,"A mixture of these":3,
+      "Survey or sampling points with coordinates":3,
+      "Counts or rates aggregated to districts, wards or facilities":3,
+      "Raster or gridded environmental data":3,
+      "Locations of events or cases (point patterns)":3});
+
+  // Flags
+  const flags=[];
+  if(!hasCode) flags.push("NO-CODE");
+  if(bluff>0) flags.push("BLUFF");
+  if(S.exp.rself==="Advanced — I write functions and packages" && correct/n < 0.4)
+    flags.push("INCONSISTENT");
+  const allowed = S.answers.reduce((a,b)=>a+b.secsAllowed,0);
+  const used = S.answers.reduce((a,b)=>a+b.secsUsed,0);
+  if(allowed && used/allowed < 0.2) flags.push("RUSHED");
+  if(S.answers.filter(a=>!a.answered).length > 3) flags.push("TIMEOUTS");
+  if(S.elig.laptop!=="Yes") flags.push("NO-LAPTOP");
+  if(S.elig.funding==="Likely covered, but not yet confirmed") flags.push("TRAVEL-UNCONFIRMED");
+  if(S.elig.funding==="I could not attend without financial support") flags.push("UNFUNDED");
+
+  return {
+    quiz:+quiz.toFixed(1), honesty:+honesty.toFixed(1),
+    relevance:+relevance.toFixed(1), impact:+impact.toFixed(1),
+    total:+(quiz+honesty+relevance+impact).toFixed(1),
+    correct, of:n, flags
+  };
+}
+
+/* ============================================================================
+   STEP 6 — REVIEW AND SUBMIT
+   ========================================================================= */
+function stepSubmit(){
+  const sc = computeScore();
+  el("stage").innerHTML = `
+  <h1>Ready to submit</h1>
+  <p class="lead">Please check your details, then submit. You will not be able to change your
+  application afterwards.</p>
+  <table class="claim">
+    <tr><th>Field</th><th style="text-align:left">Value</th></tr>
+    <tr><td style="font-family:inherit">Name</td><td style="text-align:left">${esc(S.details.first+" "+S.details.last)}</td></tr>
+    <tr><td style="font-family:inherit">Email</td><td style="text-align:left">${esc(S.details.email)}</td></tr>
+    <tr><td style="font-family:inherit">Institution</td><td style="text-align:left">${esc(S.details.institution)}</td></tr>
+    <tr><td style="font-family:inherit">Knowledge check</td><td style="text-align:left">${sc.correct} of ${sc.of} answered correctly</td></tr>
+  </table>
+  <div class="note">Your knowledge check result is only one part of the assessment. Your
+  experience, your own data, and how you plan to use the methods all carry weight, and the
+  panel reads every shortlisted application in full.</div>
+  <div id="e6" class="err" style="display:none"></div>
+  <div class="actions">
+    <button class="btn" id="go6">Submit application</button>
+    <button class="btn-ghost" id="dl">Download a copy</button>
+  </div>`;
+
+  const payload = () => ({
+    schema:"workshop-application/1",
+    submittedAt:new Date().toISOString(), startedAt:S.startedAt,
+    details:S.details, eligibility:S.elig, experience:S.exp,
+    claims:S.claim, quiz:S.answers, written:S.written, score:computeScore()
+  });
+
+  el("dl").onclick = () => download(payload());
+  el("go6").onclick = async () => {
+    el("go6").disabled = true; el("go6").textContent = "Submitting…";
+    const p = payload();
+    if(CONFIG.SUBMIT_ENDPOINT){
+      try{
+        const r = await fetch(CONFIG.SUBMIT_ENDPOINT,{method:"POST",
+          headers:{"Content-Type":"application/json"},body:JSON.stringify(p)});
+        if(!r.ok) throw new Error(r.status);
+        return done(true,p);
+      }catch(e){
+        el("e6").style.display="block";
+        el("e6").textContent="We could not reach the server. Please download your application below and email it to "+CONFIG.CONTACT_EMAIL+".";
+        el("go6").disabled=false; el("go6").textContent="Try again";
+        download(p); return;
+      }
+    }
+    download(p); done(false,p);
+  };
+}
+
+function download(p){
+  const name = (S.details.last+"_"+S.details.first).replace(/[^A-Za-z0-9_]/g,"") || "application";
+  const b = new Blob([JSON.stringify(p,null,2)],{type:"application/json"});
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(b); a.download = "application_"+name+".json";
+  document.body.appendChild(a); a.click(); a.remove();
+}
+
+function done(sent,p){
+  el("steps").innerHTML="";
+  el("stage").innerHTML = `
+  <div class="done-box">
+    <h1>Application received</h1>
+    ${sent
+      ? `<p>Thank you. Your application has been submitted and we will be in touch by email.</p>`
+      : `<p>Your application has been saved to your device as a file. Please email
+         <strong>application_…json</strong> to <strong>${CONFIG.CONTACT_EMAIL}</strong> to complete
+         your application.</p>`}
+    <p class="hint">Applications close ${CONFIG.DEADLINE}. Decisions will be sent to all
+    applicants, successful or not.</p>
+  </div>`;
+}
+
+/* ============================================================================ */
+const RENDER = [stepDetails, stepElig, stepExp, stepClaim, stepQuizIntro, stepWritten, stepSubmit];
+go(0);
+</script>
+
+
+</body></html>

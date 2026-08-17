@@ -12,7 +12,7 @@ from rest_framework.exceptions import ValidationError
 from .models import PASS_MARK, QuizSession, SessionQuestion, Question
 
 # Extra seconds allowed on top of the question limit to absorb network latency,
-# so a genuine answer sent at ~40s isn't rejected because it arrived at 40.6s.
+# so a genuine answer sent at ~25s isn't rejected because it arrived at 25.6s.
 GRACE_SECONDS = 3
 
 # PASS_MARK lives in models.py -- Application.status is derived from it too -- and
@@ -23,6 +23,7 @@ __all__ = [
     "build_session",
     "current_item",
     "has_passed",
+    "options_for",
     "submit_answer",
 ]
 
@@ -47,11 +48,30 @@ def build_session(application):
     session = QuizSession.objects.create(application=application)
     SessionQuestion.objects.bulk_create(
         [
-            SessionQuestion(session=session, question=q, position=i)
+            SessionQuestion(
+                session=session,
+                question=q,
+                position=i,
+                # Options are shuffled per applicant too, so "the answer is B"
+                # is useless to pass around. Frozen with the question order.
+                option_order=random.sample(list(q.options), len(q.options)),
+            )
             for i, q in enumerate(questions)
         ]
     )
     return session
+
+
+def options_for(item):
+    """The option order this applicant should see (falls back to the canonical order)."""
+    stored = item.option_order
+    if not stored:
+        return list(item.question.options)
+    # Guard against a question whose options were edited after the session was
+    # built: anything added is appended, anything removed is dropped.
+    canonical = list(item.question.options)
+    kept = [o for o in stored if o in canonical]
+    return kept + [o for o in canonical if o not in kept]
 
 
 def _deadline(item):
@@ -84,7 +104,7 @@ def _maybe_complete(session):
 
 def current_item(session):
     """
-    Return the question the applicant should answer now, starting its 40s clock
+    Return the question the applicant should answer now, starting its clock
     on first serve. Re-fetching does NOT reset the clock.
     """
     if session.is_complete:

@@ -139,12 +139,13 @@ two). `motivation`, `expectations` and `cv` are **not** in this response; they d
   "total": 12,
   "question": {
     "id": 5,
-    "text": "Which package is primarily used for handling spatial vector data in R?",
-    "category": "SPATIAL",
-    "options": ["sf", "randomForest", "shiny", "glm"],
-    "time_limit_seconds": 40
+    "text": "A data frame d has 100 rows and two columns: district (10 unique values) and cases. How many rows does the result have?",
+    "code": "d %>% group_by(district) %>% mutate(total = sum(cases))",
+    "category": "R",
+    "options": ["110", "100", "1", "10"],
+    "time_limit_seconds": 25
   },
-  "time_limit_seconds": 40,
+  "time_limit_seconds": 25,
   "deadline": "2026-07-28T12:10:29.840351Z"
 }
 ```
@@ -167,6 +168,14 @@ your countdown against that `deadline`, not a local `setTimeout` (they drift). T
 - The `question` object **never** contains the correct answer — don't look for it.
 - Re-fetching the current question does **not** reset the timer (safe on page reload).
 - Show `position + 1` of `total` as progress ("Question 1 of 12").
+- **`options` are shuffled per applicant** and frozen for the session. Render them in the order you
+  receive them and submit the option *string* — never an index or letter, which mean nothing
+  server-side.
+- **`code`** is an optional snippet (often R) to show under the question text. Render it in a
+  monospaced block with whitespace preserved, using `textContent` rather than `innerHTML`. It is
+  `""` for most questions.
+- **`time_limit_seconds` is per question** (25 by default) — read it rather than hard-coding, since
+  a long scenario question may be given more time.
 
 `POST /api/quiz/{session_id}/answer/` — send JSON:
 
@@ -302,7 +311,7 @@ otherwise                    -> GET /quiz/{id}/current/ and render the current q
 ## 3. Suggested applicant-portal screens
 
 1. **Details form** → Step 1. Button reads **"Next"**. On success, store `application_id`, go to (2).
-2. **Quiz intro** ("40s per question, no going back") → button calls Step 2.
+2. **Quiz intro** ("25s per question, no going back") → button calls Step 2.
 3. **Quiz question** → renders one question + countdown + options; submit calls Step 3; auto-advances.
 4. **Results** → Step 4. Shows the score. If `passed && !final_submitted`, offer "Continue to final
    step"; otherwise the journey ends here.

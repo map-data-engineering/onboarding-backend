@@ -121,7 +121,7 @@ def quiz_current(request, session_id):
 
 @api_view(["POST"])
 def quiz_answer(request, session_id):
-    """Submit an answer for the current question; server enforces the 40s window."""
+    """Submit an answer for the current question; server enforces the time window."""
     session = get_object_or_404(QuizSession, pk=session_id)
     payload = AnswerSerializer(data=request.data)
     payload.is_valid(raise_exception=True)
