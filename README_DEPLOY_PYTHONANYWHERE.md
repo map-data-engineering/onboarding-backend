@@ -350,12 +350,14 @@ python manage.py createsuperuser            # create your staff / admin login
 `createsuperuser` prompts for a username, email, and password — this account can sign in to both the
 staff panel (`/panel/`) and the Django admin (`/admin/`), with full rights.
 
-**Make at least one superuser, and mind who else gets one.** The **CSV exports and the shortlist
-builder are superuser-only**: a plain `is_staff` account can read every application, download CVs,
-set decisions and move the deadline, but cannot download the applicant table or run the ranking.
-Those are the two actions whose output leaves the panel, so they are granted deliberately rather
-than by handing out a staff login. Ordinary reviewers can be created in the Django admin with
-**Staff status** ticked and **Superuser status** left off.
+**Make at least one superuser, and mind who else gets one.** **Deleting applicants and the
+shortlist builder are superuser-only**: a plain `is_staff` account can read every application,
+download CVs, set decisions, export the CSV and move the deadline, but cannot delete a record or
+run the ranking. A delete is the one action no later edit undoes, so it is granted deliberately
+rather than by handing out a staff login. Ordinary reviewers can be created in the Django admin
+with **Staff status** ticked and **Superuser status** left off — and note that ticking the
+`delete_application` permission for them does *not* reopen deletion, in the panel or in
+`/admin/`.
 
 **Optional — a read-only account** for colleagues who should see applicants but change nothing:
 
@@ -364,11 +366,11 @@ python manage.py create_viewer amina --email amina@example.org
 ```
 
 It prompts for a password. The account can sign in to `/panel/` and browse counts, the applicant
-list, details, CV downloads and quiz breakdowns, but **cannot** set decisions, run bulk actions or
-delete — the panel hides those controls and the API returns 403 either way. Exports and the
-shortlist are out of reach for viewers *and* reviewers alike; only superusers see them. Use
-`--revoke` to promote a viewer to a full reviewer later. (Membership of the "Applicant viewers"
-group is what marks the account, so you can also flip it from Django admin.)
+list, details, CV downloads and quiz breakdowns, but **cannot** set decisions, run bulk actions,
+delete, or export the CSV — the panel hides those controls and the API returns 403 either way.
+(Reviewers *can* export; the viewer tier is the one the file is withheld from.) Use `--revoke` to
+promote a viewer to a full reviewer later. (Membership of the "Applicant viewers" group is what
+marks the account, so you can also flip it from Django admin.)
 
 **If step 8b reported a problem, read this before retrying:**
 
@@ -424,8 +426,8 @@ If `bank_size` describes the previous release, `seed_questions` did not run agai
 5. In `/panel/`, signed in **as a superuser**, click **Build a shortlist**: the stat tiles, floor pills
    and ranked table must render, and **Export shortlist + waitlist** must download a CSV. Buttons
    that do nothing here mean stale static files, not a code problem — run `collectstatic` and Reload.
-   Signed in as an ordinary staff account, the **Build a shortlist** and **Export CSV** buttons should
-   not be there at all.
+   Signed in as an ordinary staff account, **Build a shortlist**, **Delete applicant** and the bulk
+   **Delete** button should not be there at all — while **Export CSV** should be, and should work.
 6. Check the **deadline card** above the applicants table shows the closing date for this round, and
    set it if not.
 7. Download the CV from the applicant's detail page.
@@ -664,8 +666,10 @@ hand from there.
 | Every step reported success, but the site is unchanged | The pull aborted (above) and the rest of the block still ran | `git log --oneline -1` — if it isn't the commit you pushed, nothing was deployed. Re-run the steps after a clean pull |
 | `seed_questions` describes the **previous** question bank | Same cause: the code on disk is old | Fix the pull, then re-run. `24 active in the bank; 14 drawn per applicant` is the current release |
 | `No module named 'whitenoise'`, or `InvalidStorageError: Could not find backend 'whitenoise.storage.CompressedStaticFilesStorage'` | The virtualenv is not active, so `manage.py` is on the system Python. Traceback paths say `/usr/local/lib/python3.13/site-packages/…` instead of `~/.virtualenvs/…` | `workon onboarding-venv`, confirm with `which python`, then re-run. The prompt shows `(onboarding-venv)` when active |
-| **Build a shortlist** or **Export CSV** is missing from the panel | The account is staff but not a superuser — both are superuser-only | Deliberate. Sign in with a superuser, or tick **Superuser status** on that account in `/admin/` if they should have it |
-| `/api/admin/shortlist/` or `/export/` returns **403** "restricted to superuser accounts" | Same cause, from a hand-made request or a standalone frontend | Same fix; the panel hides the buttons, the API is what enforces it |
+| **Build a shortlist** or the **Delete** buttons are missing from the panel | The account is staff but not a superuser — both are superuser-only | Deliberate. Sign in with a superuser, or tick **Superuser status** on that account in `/admin/` if they should have it |
+| `/api/admin/shortlist/`, `DELETE` or `/bulk/` with `action: "delete"` returns **403** "restricted to superuser accounts" | Same cause, from a hand-made request or a standalone frontend | Same fix; the panel hides the buttons, the API is what enforces it |
+| A reviewer cannot delete in `/admin/` even with the `delete_application` permission ticked | `ApplicationAdmin.has_delete_permission` is superuser-only on purpose, so the admin is not a wider door than the panel | Deliberate. Delete as a superuser |
+| **Export CSV** is missing | The account is **view-only** — the one tier without it | Expected. `create_viewer <username> --revoke` promotes them to a reviewer, who can export |
 | Panel renders the shortlist controls but the buttons do nothing | `collectstatic` was skipped or crashed, so WhiteNoise is serving the previous `panel.js` (and its `.gz`) | `python manage.py check` reports `application.W001`; run `collectstatic --noinput` (or `--clear`) and Reload |
 | Applicants' Pass/Fail labels changed without anyone touching the data | `PASS_MARK` was moved and status is derived on read, so it re-graded existing applications | Deliberate if intended; otherwise restore the previous value in `application/models.py`. Nobody loses a submission over it — the CV and written answers are collected before the quiz — but the panel's Pass/Fail filter shifts under the reviewers |
 
@@ -747,7 +751,7 @@ panel's Pass/Fail filter. It is a constant in the code, not an environment varia
 
 ```python
 # application/models.py
-PASS_MARK = 8        # out of the 14 questions drawn per applicant
+PASS_MARK = 7        # out of the 14 questions drawn per applicant
 ```
 
 To change it, edit that line, `git pull` on the server, and **Reload**. No migration is needed.

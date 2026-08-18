@@ -527,13 +527,20 @@ Django admin). Token auth does **not** require a CSRF header.
 
 - **`role`** is `"reviewer"` or `"viewer"`. A **viewer** is a staff account restricted to reading:
   applicant counts, the list, details, CV downloads and quiz breakdowns.
-- **`is_superuser`** — the top tier. Exports and the shortlist are restricted to it.
-- **`can_review`** — false for viewers. Use it to hide the decision buttons, delete button, bulk
-  toolbar and row checkboxes.
-- **`can_export`** — **true only for superusers**; hide both CSV export buttons.
-- **`can_shortlist`** — **true only for superusers**; hide the "Build a shortlist" entry point
-  entirely rather than opening an empty ranking, which reads as "no applicants" instead of "not
-  your account".
+- **`is_superuser`** — the top tier. Deleting and the shortlist are restricted to it.
+- **`can_review`** — false for viewers. Use it to hide the decision buttons, bulk toolbar and row
+  checkboxes.
+- **`can_export`** — true for reviewers and superusers, false for viewers; hides the CSV button.
+- **`can_delete`** — **true only for superusers**; hide the applicant delete button *and* the
+  bulk **Delete** action. Check it again in the handler: a delete reached another way should say
+  why rather than surface a bare 403.
+- **`can_shortlist`** — **true only for superusers**; hide the "Build a shortlist" entry point and
+  its two CSV buttons entirely rather than opening an empty ranking, which reads as "no
+  applicants" instead of "not your account".
+
+> One flag per set of controls, even where two share a rule today. `can_delete` and
+> `can_shortlist` are both superuser-only right now; a client that collapsed either into
+> `is_superuser` needs rewriting the first time they part company.
 
 > Treat these as *display* hints only. Every write endpoint plus `/export/` re-checks server-side and
 > returns **403** `{"detail": "Your account has view-only access to applicants."}`, so a viewer who
@@ -588,8 +595,8 @@ when intake stops.
 - `quiz_status` is one of `"not_started" | "in_progress" | "completed"`. `score`/`total` are `null`
   until a quiz exists.
 
-**Export CSV** — `GET /api/admin/applications/export/` — **superusers only** (403 for every other
-staff account, with the reason in `detail`).
+**Export CSV** — `GET /api/admin/applications/export/` — reviewers and superusers; **403 for
+view-only accounts**, with the reason in `detail`.
 
 Takes the *same* `?search=` and `?status=` params as the list, so the download contains exactly the
 filtered rows. Responds with `text/csv` and a `Content-Disposition` filename

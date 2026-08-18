@@ -9,15 +9,17 @@ from django.utils import timezone
 # Application.status, the BELOW-PASS flag and the panel's pass/fail filter. An
 # absolute count, not a percentage -- revisit it if the size of the draw changes.
 #
-# 8 of the 14 questions drawn per applicant (settings.PORTAL["QUOTA"]), i.e. the
-# same 57% bar as the previous 7-of-12 paper. Because status is derived on read,
-# changing this re-grades everyone, including applications already submitted.
+# The benchmark, as an absolute count out of the 14 questions drawn per applicant
+# (settings.PORTAL["QUOTA"]) -- not a percentage. Because status is derived on read
+# rather than stored, changing this re-grades everyone, including applications
+# already submitted, so move it deliberately and expect the panel's Pass/Fail
+# filter to shift under the reviewers.
 #
-# It is a grade, NOT a gate. Scoring below it no longer stops anyone submitting:
-# an applicant who cannot answer eight quiz questions may still be the right
-# person in the room, and the panel is better placed to weigh a 6/14 against a
-# strong CV than a hard cut-off is. See views.application_finalize.
-PASS_MARK = 8
+# It is a grade, NOT a gate. Scoring below it no longer stops anyone submitting: an
+# applicant who misses the mark on a 30-second-a-question paper may still be the
+# right person in the room, and the panel is better placed to weigh a weak quiz
+# against a strong CV than a hard cut-off is. See views.application_finalize.
+PASS_MARK = 7
 
 # Fallback deadline for the round, used as the initial value of
 # PortalSettings.application_deadline. Staff change the live value from the panel

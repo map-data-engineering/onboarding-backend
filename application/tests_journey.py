@@ -304,13 +304,25 @@ class JourneyOrderTests(TestCase):
         self.assertEqual(len(rows), 1)
 
     def test_the_result_payload_still_reports_the_grade(self):
+        """
+        The grade survives the gate's removal: score, total, benchmark, verdict.
+
+        Asserted against `PASS_MARK` rather than a literal -- the benchmark is a
+        panel decision that moves between rounds, and a test that pins the number
+        turns changing it into a test failure instead of a policy change.
+        """
+        from application.models import PASS_MARK
+
         self.submit_work()
         session = self.sit_quiz(correct=4)
         result = self.client.get(f"/api/quiz/{session.id}/result/").json()
         self.assertEqual(result["score"], 4)
         self.assertEqual(result["total"], 4)
-        self.assertEqual(result["pass_mark"], 8)
-        self.assertFalse(result["passed"])   # 4 of 4 drawn, benchmark is 8 of 14
+        self.assertEqual(result["pass_mark"], PASS_MARK)
+        # 4 correct out of the 4 drawn here, against a benchmark set over the full
+        # 14-question paper, so this is a fail however the mark is set.
+        self.assertGreater(PASS_MARK, 4)
+        self.assertFalse(result["passed"])
         self.assertTrue(result["final_submitted"])
 
     def test_status_reports_the_work_step_so_a_reload_resumes_after_it(self):

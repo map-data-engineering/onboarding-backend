@@ -33,11 +33,15 @@ from .cv_links import unsign_cv_link
 from .exports import applications_csv_response
 from .models import PASS_MARK, Application, PortalSettings
 from .permissions import (
+    CanBuildShortlist,
+    CanDeleteApplicants,
     CanExportApplicants,
     CanReviewApplicants,
     IsStaff,
+    can_delete,
     can_export,
     can_review,
+    can_shortlist,
     is_viewer,
 )
 
@@ -75,19 +79,19 @@ def _user_payload(user):
     according to these flags. That is presentation only -- every one of those
     endpoints enforces the same rule server-side.
     """
-    exporter = can_export(user)
     return {
         "username": user.username,
         "email": user.email,
         "is_superuser": user.is_superuser,
         "role": "viewer" if is_viewer(user) else "reviewer",
         "can_review": can_review(user),
-        # Both are superuser-only: a CSV takes the whole applicant table out of
-        # the panel, and the shortlist is the selection itself rather than a view
-        # of it. Reported as two flags because the panel hides two sets of
-        # controls, and they may not always move together.
-        "can_export": exporter,
-        "can_shortlist": exporter,
+        "can_export": can_export(user),
+        # One flag per set of controls the panel hides, even where two share a rule
+        # today: `can_delete` and `can_shortlist` are both superuser-only, and a
+        # client that collapsed them into `is_superuser` would need rewriting the
+        # first time they part company.
+        "can_delete": can_delete(user),
+        "can_shortlist": can_shortlist(user),
     }
 
 
@@ -243,10 +247,9 @@ def admin_applications_export(request):
     Download the applicants matching the current filters as CSV.
 
     Takes the same ?search= and ?status= params as the list, so the file contains
-    exactly the rows on screen -- not the whole table. **Superusers only**: any
-    staff account can read records one at a time in the panel, but a CSV is the
-    whole filtered applicant database -- names, emails, phone numbers and free
-    text -- leaving for somebody's laptop, where none of these checks apply.
+    exactly the rows on screen -- not the whole table. Open to reviewers: it is the
+    data they already read in the panel, in a form they can sort and filter.
+    View-only accounts are excluded.
     """
     try:
         qs = _filtered_applications(request)
@@ -292,7 +295,7 @@ def _shortlist_queryset():
 
 
 @api_view(["GET", "POST"])
-@permission_classes([CanExportApplicants])
+@permission_classes([CanBuildShortlist])
 def admin_shortlist(request):
     """
     Rank every application and allocate seats under the panel's floors.
@@ -351,14 +354,15 @@ def admin_shortlist(request):
 
 
 @api_view(["POST"])
-@permission_classes([CanExportApplicants])
+@permission_classes([CanBuildShortlist])
 def admin_shortlist_export(request):
     """
     CSV of the ranking just built, with Rank, Shortlisted and Waitlisted columns.
 
     Takes the same body as the builder plus `only_shortlist`, so the panel can
-    hand over either the full ranking or the picks alone. Superusers only, like
-    the builder it comes from and the other export.
+    hand over either the full ranking or the picks alone. Superusers only, like the
+    builder it comes from -- the restriction is on seeing the ranking, so the file
+    of it follows.
     """
     options = _shortlist_options(request.data)
     result = shortlisting.build_shortlist(_shortlist_queryset(), **options)
@@ -392,14 +396,17 @@ def admin_application_detail(request, application_id):
     PATCH  -> update the review decision ({"decision": "SELECTED"|"REJECTED"|"PENDING"})
     DELETE -> delete the applicant (and their uploaded CV + quiz, via cascade)
 
-    Reading is open to any staff account; PATCH and DELETE are reviewers only.
+    Reading is open to any staff account, PATCH to reviewers, and DELETE to
+    superusers alone -- it is the one action here that no later edit can undo.
     """
     application = get_object_or_404(Application, pk=application_id)
 
-    # One view, three methods -- so the write check lives here rather than in a
-    # permission class, which would have to allow the GET through anyway.
-    if request.method in ("PATCH", "DELETE") and not can_review(request.user):
+    # One view, three methods, three rules -- so the write checks live here rather
+    # than in a permission class, which would have to allow the GET through anyway.
+    if request.method == "PATCH" and not can_review(request.user):
         raise PermissionDenied(CanReviewApplicants.message)
+    if request.method == "DELETE" and not can_delete(request.user):
+        raise PermissionDenied(CanDeleteApplicants.message)
 
     if request.method == "DELETE":
         if application.cv:
@@ -482,6 +489,11 @@ def admin_applications_bulk(request):
     Act on several applicants at once (used by the staff panel's checkboxes).
 
     Body: {"ids": ["<uuid>", ...], "action": "select"|"reject"|"pending"|"delete"}
+
+    The decision actions are open to reviewers; `delete` is superuser-only, checked
+    below. Bulk is where a mistaken delete does the most damage -- it is the same
+    verb applied to every checked row at once -- so it gets the same rule as the
+    single-record endpoint rather than a looser one.
     """
     ids = request.data.get("ids") or []
     action = request.data.get("action")
@@ -493,6 +505,8 @@ def admin_applications_bulk(request):
     qs = Application.objects.filter(pk__in=ids)
 
     if action == "delete":
+        if not can_delete(request.user):
+            raise PermissionDenied(CanDeleteApplicants.message)
         deleted = 0
         for application in qs:
             if application.cv:

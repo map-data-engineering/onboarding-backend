@@ -81,11 +81,11 @@ Bayesian statistics.
   filterable by status), view details + CV, and see a per-question quiz breakdown.
 - **CSV export** — download the applicants matching the current search/status filters, so the file
   contains exactly the rows on screen.
-- **Three staff tiers** — *superusers* (everything, and the only tier that can run a CSV export or
-  the shortlist builder), *reviewers* (read applications, change decisions, delete, move the
-  deadline) and *viewers*, read-only accounts that can see applicant counts, details and quiz
-  breakdowns and nothing else. A staff login is not a licence to walk off with the applicant
-  table or to run the selection.
+- **Three staff tiers** — *superusers* (everything, and the only tier that can **delete an
+  applicant** or run the shortlist builder), *reviewers* (read applications, change decisions,
+  bulk decisions, export the CSV, move the deadline) and *viewers*, read-only accounts that can
+  see applicant counts, details and quiz breakdowns and nothing else. Deleting is the one action
+  no later edit can undo, so it is the one a staff login does not carry.
 - **Same-origin frontend** — lightweight HTML/JS pages served by Django, so the browser calls `/api/`
   with no CORS setup.
 
@@ -246,7 +246,7 @@ All endpoints live under `/api/`.
 | GET | `/api/admin/me/` | Current staff user |
 | GET/PATCH | `/api/admin/settings/` | The application deadline. GET for any staff account; PATCH `{"application_deadline": "2026-08-30"}` for reviewers |
 | GET | `/api/admin/applications/` | List applicants (`?search=`, `?status=pass\|fail\|pending`, `?page=`) |
-| GET | `/api/admin/applications/export/` | CSV of the filtered applicants (**superusers only**) |
+| GET | `/api/admin/applications/export/` | CSV of the filtered applicants (reviewers; not viewers) |
 | GET | `/api/admin/applications/{id}/` | Applicant detail + CV URL |
 | GET | `/api/admin/applications/{id}/cv/` | Stream an applicant's CV (staff token, or the short-lived `?sig=` link the detail returns) |
 | GET | `/api/admin/applications/{id}/quiz/` | Per-question breakdown |
@@ -283,26 +283,35 @@ Full request/response shapes and frontend integration notes are in
 
 | Role | How to create | Can do |
 |------|---------------|--------|
-| **Superuser** | `createsuperuser` | Everything, and the **only** tier that may run a CSV export or the shortlist builder |
-| **Reviewer** | any `is_staff` account that is not a superuser | Read applications and CVs, change decisions, bulk actions, delete, move the deadline. **No exports, no shortlist** |
-| **Viewer** | `create_viewer <username>` | Read-only: applicant count, list, details, CV download, quiz breakdown |
+| **Superuser** | `createsuperuser` | Everything, and the **only** tier that may **delete an applicant** or run the shortlist builder |
+| **Reviewer** | any `is_staff` account that is not a superuser | Read applications and CVs, change decisions, bulk decisions, **export the CSV**, move the deadline. **No deleting, no shortlist** |
+| **Viewer** | `create_viewer <username>` | Read-only: applicant count, list, details, CV download, quiz breakdown. No export |
 
 A viewer is a normal staff account placed in the **"Applicant viewers"** group, so you can also
 toggle the role from Django admin (add/remove the group) without touching code. `create_viewer
 <username> --revoke` promotes one back to a full reviewer, and superusers are never treated as
 view-only.
 
-**Why exports and the shortlist sit above reviewer.** They are the two actions whose effects
-leave the panel. A CSV is the whole filtered applicant database — names, emails, phone numbers,
-free text — living on somebody's laptop where none of these checks apply; reading records one at
-a time leaves the data where it is. The shortlist is the selection itself, the ranking with the
-cut line drawn and the floors applied, and a provisional ordering circulated before the panel
-meets reads as the outcome. Granting either should be an explicit act, not a side effect of
-issuing a staff login.
+**Why deleting and the shortlist sit above reviewer.** A delete cannot be walked back: it takes
+the application, the CV and the quiz for good, and an applicant deleted by mistake looks exactly
+like one who never applied — discovered, if at all, in the week offers go out. Every other
+reviewer action is a field you can set again. The shortlist is the selection itself, the ranking
+with the cut line drawn and the floors applied, and a provisional ordering circulated before the
+panel meets reads as the outcome. Both should be an explicit grant, not a side effect of issuing
+a staff login.
+
+**Why exporting is not.** A CSV is a real disclosure — the filtered applicant table, names and
+emails and free text, on somebody's laptop and outside every check in the code. But it is the
+same disclosure a reviewer already has by reading the panel, in a form they can sort and filter.
+Withholding it does not keep the data in; it makes reviewers read 500 applications through a web
+page. Viewers are the exception: for an account whose defining property is that it changes
+nothing, the file *is* the whole point.
 
 The panel hides the controls an account can't use, but that's cosmetic — `PATCH`, `DELETE`,
-`/bulk/`, both `/export/` endpoints and `/shortlist/` all enforce their own rule and return
-**403** regardless of what the browser sends.
+`/bulk/` (including `action: "delete"`), `/export/` and `/shortlist/` each enforce their own rule
+and return **403** regardless of what the browser sends. `/admin/` follows the same delete rule:
+`ApplicationAdmin.has_delete_permission` is superuser-only, so granting a reviewer the
+`delete_application` model permission does not reopen it there.
 
 ### Editing the question bank
 
@@ -336,8 +345,8 @@ Two rules when adding questions:
    its own numbers and asks for a consequence or a next action, and the distractors are the common
    misconceptions rather than filler, so elimination doesn't work either.
 
-Changing the size of the draw affects the pass mark, which is an absolute count (`PASS_MARK = 8` in
-`application/models.py`), not a percentage. Because `status` is derived on read, changing it re-grades
+Changing the size of the draw affects the pass mark, which is an absolute count (`PASS_MARK` in
+`application/models.py`, currently **7** of 14), not a percentage. Because `status` is derived on read, changing it re-grades
 every application, including ones already submitted. It re-grades only: no applicant loses a
 submission over it, because the written answers and the CV are collected before the quiz and are not
 conditional on the score.

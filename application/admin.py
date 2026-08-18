@@ -1,6 +1,7 @@
 from django.contrib import admin
 
 from .models import Application, PortalSettings, Question, QuizSession, SessionQuestion
+from .permissions import can_delete
 
 
 @admin.register(PortalSettings)
@@ -73,3 +74,16 @@ class ApplicationAdmin(admin.ModelAdmin):
         # Application.status is derived from the score, so it can't be a
         # list_filter here -- use the staff panel's ?status= filter for that.
         return application.status_display
+
+    def has_delete_permission(self, request, obj=None):
+        """
+        Superusers only, matching the panel.
+
+        Django would otherwise grant this from the `delete_application` model
+        permission, so a reviewer given "all application permissions" in the group
+        editor would get here what the panel refuses them -- and the admin's bulk
+        delete action is the easiest place in the project to remove 500 records by
+        accident. The panel is the interface reviewers are meant to use; this keeps
+        the back door from being wider than the front one.
+        """
+        return can_delete(request.user)

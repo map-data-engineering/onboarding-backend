@@ -652,9 +652,9 @@ class ShortlistApiTests(TestCase):
         """
         A staff login is not a licence to run the selection.
 
-        A reviewer reads applications; the ranking with the cut line drawn, and any
-        file that takes the applicant table out of the panel, stay with the
-        superuser accounts. Both tiers get a 403 with a reason, not a 404.
+        A reviewer reads applications and can export them; the ranking with the cut
+        line drawn stays with the superuser accounts. Both other tiers get a 403
+        with a reason, not a 404.
         """
         for label, header in (
             ("reviewer", self._staff_header("plain_reviewer")),
@@ -673,23 +673,36 @@ class ShortlistApiTests(TestCase):
                     self.client.get("/api/admin/shortlist/", **header).status_code, 403
                 )
 
-    def test_the_applicant_csv_is_superuser_only_too(self):
-        for label, header in (
-            ("reviewer", self._staff_header("csv_reviewer")),
-            ("viewer", self._staff_header("csv_viewer", viewer=True)),
-        ):
-            with self.subTest(role=label):
-                self.assertEqual(
-                    self.client.get("/api/admin/applications/export/", **header).status_code,
-                    403,
-                )
-        # ...and the list they were reading before still works, so the panel is
-        # usable without them: this restricts the file, not the review.
+    def test_a_reviewer_can_export_the_applicant_csv(self):
+        """
+        The export is a reviewer action: it is the data they already read.
+
+        Gating it would not keep anything in -- a reviewer can read every field in
+        the panel -- it would only make them do it 500 times through a web page.
+        """
+        response = self.client.get(
+            "/api/admin/applications/export/", **self._staff_header("csv_reviewer")
+        )
+        self.assertEqual(response.status_code, 200)
+        self.assertIn("text/csv", response["Content-Type"])
+        # It streams, so the rows arrive as chunks rather than `.content`.
+        body = b"".join(response.streaming_content).decode("utf-8-sig")
+        self.assertIn("one@example.org", body)
+
+    def test_a_viewer_still_cannot_export(self):
+        """
+        The one tier the file is withheld from.
+
+        A viewer exists to change nothing; handing that account the whole applicant
+        table in one file is the case where the file is the entire point. They keep
+        the list, which is what they are for.
+        """
+        header = self._staff_header("csv_viewer", viewer=True)
+        response = self.client.get("/api/admin/applications/export/", **header)
+        self.assertEqual(response.status_code, 403)
+        self.assertIn("view-only", response.json()["detail"])
         self.assertEqual(
-            self.client.get(
-                "/api/admin/applications/", **self._staff_header("list_reviewer")
-            ).status_code,
-            200,
+            self.client.get("/api/admin/applications/", **header).status_code, 200
         )
 
     def test_a_superuser_can_still_rank_and_export(self):
@@ -704,14 +717,138 @@ class ShortlistApiTests(TestCase):
         )
 
     def test_the_panel_is_told_which_controls_to_hide(self):
-        """`can_export`/`can_shortlist` drive the buttons; the endpoints enforce it."""
+        """The `can_*` flags drive the buttons; the endpoints enforce the same rules."""
         superuser = self.client.get("/api/admin/me/", **self.auth()).json()
         self.assertTrue(superuser["can_export"])
         self.assertTrue(superuser["can_shortlist"])
+        self.assertTrue(superuser["can_delete"])
 
         reviewer = self.client.get(
             "/api/admin/me/", **self._staff_header("flags_reviewer")
         ).json()
-        self.assertTrue(reviewer["can_review"])       # still reviews applications
-        self.assertFalse(reviewer["can_export"])
+        self.assertTrue(reviewer["can_review"])       # decisions, bulk decisions
+        self.assertTrue(reviewer["can_export"])       # the CSV is theirs now
+        self.assertFalse(reviewer["can_delete"])      # the one destructive verb
         self.assertFalse(reviewer["can_shortlist"])
+
+        viewer = self.client.get(
+            "/api/admin/me/", **self._staff_header("flags_viewer", viewer=True)
+        ).json()
+        self.assertEqual(viewer["role"], "viewer")
+        for flag in ("can_review", "can_export", "can_delete", "can_shortlist"):
+            self.assertFalse(viewer[flag], flag)
+
+
+class DeleteRestrictionTests(TestCase):
+    """
+    Deleting an applicant is superuser-only, and the record must survive a refusal.
+
+    A wrong decision is an edit; a wrong delete is an applicant who looks exactly
+    like someone who never applied, discovered in the week offers go out. So a
+    reviewer can do everything else and not this -- and the test that matters is
+    not the status code but that the row is still there afterwards.
+    """
+
+    def setUp(self):
+        from django.contrib.auth.models import Group, User
+        from rest_framework.authtoken.models import Token
+
+        self.application = Application.objects.create(
+            **APPLICANT, email="keepme@example.org",
+            country_of_residence=countries.TANZANIA, nationality=countries.TANZANIA,
+        )
+        self.url = f"/api/admin/applications/{self.application.pk}/"
+
+        def header(username, **flags):
+            viewer = flags.pop("viewer", False)
+            user = User.objects.create_user(username, password="x", is_staff=True, **flags)
+            if viewer:
+                group, _ = Group.objects.get_or_create(name="Applicant viewers")
+                user.groups.add(group)
+            return {"HTTP_AUTHORIZATION": f"Token {Token.objects.create(user=user).key}"}
+
+        self.superuser = header("boss", is_superuser=True)
+        self.reviewer = header("hands")
+        self.viewer = header("eyes", viewer=True)
+
+    def test_a_reviewer_cannot_delete_an_applicant(self):
+        response = self.client.delete(self.url, **self.reviewer)
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertIn("superuser", response.json()["detail"])
+        self.assertTrue(Application.objects.filter(pk=self.application.pk).exists())
+
+    def test_a_viewer_cannot_delete_an_applicant(self):
+        self.assertEqual(self.client.delete(self.url, **self.viewer).status_code, 403)
+        self.assertTrue(Application.objects.filter(pk=self.application.pk).exists())
+
+    def test_a_reviewer_can_still_set_a_decision(self):
+        """The restriction is on deleting, not on reviewing -- PATCH is untouched."""
+        response = self.client.patch(
+            self.url, {"decision": "SELECTED"},
+            content_type="application/json", **self.reviewer,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.application.refresh_from_db()
+        self.assertEqual(self.application.decision, "SELECTED")
+
+    def test_a_superuser_can_delete(self):
+        self.assertEqual(self.client.delete(self.url, **self.superuser).status_code, 204)
+        self.assertFalse(Application.objects.filter(pk=self.application.pk).exists())
+
+    def test_bulk_delete_is_refused_for_a_reviewer_but_bulk_decisions_are_not(self):
+        """
+        Bulk is where a mistaken delete does the most damage, so it gets the same
+        rule -- and it must not be a back door around the single-record check.
+        """
+        body = {"ids": [str(self.application.pk)], "action": "delete"}
+        response = self.client.post(
+            "/api/admin/applications/bulk/", body,
+            content_type="application/json", **self.reviewer,
+        )
+        self.assertEqual(response.status_code, 403, response.content)
+        self.assertTrue(Application.objects.filter(pk=self.application.pk).exists())
+
+        response = self.client.post(
+            "/api/admin/applications/bulk/",
+            {"ids": [str(self.application.pk)], "action": "reject"},
+            content_type="application/json", **self.reviewer,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["updated"], 1)
+
+    def test_bulk_delete_works_for_a_superuser(self):
+        response = self.client.post(
+            "/api/admin/applications/bulk/",
+            {"ids": [str(self.application.pk)], "action": "delete"},
+            content_type="application/json", **self.superuser,
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["deleted"], 1)
+        self.assertFalse(Application.objects.filter(pk=self.application.pk).exists())
+
+    def test_the_django_admin_will_not_delete_for_a_non_superuser_either(self):
+        """
+        The back door must not be wider than the front one.
+
+        Django grants admin deletion from the `delete_application` model
+        permission, so a reviewer handed "all application permissions" in the group
+        editor would get in `/admin/` exactly what the panel refuses them -- next to
+        a bulk delete action over a whole filtered page.
+        """
+        from django.contrib.admin.sites import site
+        from django.contrib.auth.models import Permission, User
+        from django.test import RequestFactory
+
+        admin_instance = site._registry[Application]
+        request = RequestFactory().get("/admin/")
+
+        reviewer = User.objects.get(username="hands")
+        reviewer.user_permissions.add(
+            *Permission.objects.filter(content_type__app_label="application")
+        )
+        request.user = User.objects.get(pk=reviewer.pk)     # re-read: permissions are cached
+        self.assertFalse(admin_instance.has_delete_permission(request))
+        self.assertNotIn("delete_selected", admin_instance.get_actions(request))
+
+        request.user = User.objects.get(username="boss")
+        self.assertTrue(admin_instance.has_delete_permission(request))

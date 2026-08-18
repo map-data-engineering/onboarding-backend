@@ -61,24 +61,28 @@ loginForm.addEventListener("submit", async (e) => {
   }
 });
 
-// Viewers get a read-only panel, and only superusers see the exports and the
-// shortlist. The server enforces all of it, so this is purely about not showing
-// buttons that would come back 403.
+// Viewers get a read-only panel; deleting and the shortlist are superuser-only.
+// The server enforces all of it, so this is purely about not showing buttons that
+// would come back 403.
 let CAN_REVIEW = true;
+let CAN_DELETE = true;
 let CAN_SHORTLIST = true;
 
 function setNavUser(user) {
   const role = user.is_superuser ? " · superuser" : user.role === "viewer" ? " · view only" : "";
   el("nav-username").textContent = user.username + role;
   CAN_REVIEW = user.can_review !== false;
+  CAN_DELETE = user.can_delete !== false;
   CAN_SHORTLIST = user.can_shortlist !== false;
   hide(el("viewer-badge"), CAN_REVIEW);
   hide(el("export-csv"), user.can_export === false);
-  // Both are superuser-only: a CSV takes the whole applicant table out of the
-  // panel, and the shortlist is the selection rather than a view of it.
+  // Superuser-only, for different reasons: a delete is the one action no later
+  // edit undoes, and the shortlist is the selection rather than a view of it.
+  hide(el("d-delete"), !CAN_DELETE);
+  hide(document.querySelector('[data-bulk="delete"]'), !CAN_DELETE);
   hide(el("go-shortlist"), !CAN_SHORTLIST);
-  hide(el("sl-csv"), user.can_export === false);
-  hide(el("sl-csv-short"), user.can_export === false);
+  hide(el("sl-csv"), !CAN_SHORTLIST);
+  hide(el("sl-csv-short"), !CAN_SHORTLIST);
   hide(el("select-all").closest("th"), !CAN_REVIEW);
   hide(el("decision-controls"), !CAN_REVIEW);
   // Viewers see when the round closes -- it explains an empty week of applicants --
@@ -255,9 +259,18 @@ document.querySelectorAll("[data-bulk]").forEach((button) =>
 async function runBulk(action) {
   if (!selected.size) return;
   const ids = [...selected];
-  if (action === "delete" &&
-      !confirm(`Delete ${ids.length} applicant(s)? This also removes their CV and quiz, and cannot be undone.`)) {
-    return;
+  if (action === "delete") {
+    // The button is hidden for these accounts, so this catches a keyboard or
+    // console route to it -- and says why, rather than letting the 403 read as a
+    // failure of the action itself.
+    if (!CAN_DELETE) {
+      listAlert.textContent = "Deleting applicants is restricted to superuser accounts.";
+      hide(listAlert, false);
+      return;
+    }
+    if (!confirm(`Delete ${ids.length} applicant(s)? This also removes their CV and quiz, and cannot be undone.`)) {
+      return;
+    }
   }
   hide(listAlert, true);
   try {
@@ -649,6 +662,12 @@ document.querySelectorAll("[data-decision]").forEach((button) =>
   }));
 
 el("d-delete").addEventListener("click", async () => {
+  if (!CAN_DELETE) {
+    el("detail-alert").textContent =
+      "Deleting applicants is restricted to superuser accounts.";
+    hide(el("detail-alert"), false);
+    return;
+  }
   if (!confirm("Delete this applicant? This also removes their CV and quiz, and cannot be undone.")) return;
   try {
     await adminCall("DELETE", `/admin/applications/${currentDetailId}/`);
