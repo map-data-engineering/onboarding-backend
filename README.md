@@ -131,9 +131,11 @@ onboarding/
 │   ├── serializers.py / admin_serializers.py
 │   ├── urls.py                    # all /api/ routes
 │   ├── admin.py                   # Django built-in admin registrations
-│   ├── management/commands/seed_questions.py
+│   ├── management/commands/          # seed_questions, create_viewer, repair_migrations
+│   ├── migration_repair.py         # deciding what to --fake when schema and ledger disagree
 │   ├── templates/                 # base.html, applicant/portal.html, panel/index.html
 │   ├── tests.py                   # static-asset check, the draw, the quiz clock, the shortlist
+│   ├── tests_migrations.py        # the migration-history repair, incl. the cases it refuses
 │   ├── tests_journey.py           # the deadline, the step order, and the score as a grade
 │   └── static/                    # css/styles.css, js/{api,applicant,panel}.js
 └── demo_fill.py                   # scripted end-to-end API walkthrough

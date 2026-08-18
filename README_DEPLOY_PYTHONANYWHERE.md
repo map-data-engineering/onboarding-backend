@@ -617,6 +617,44 @@ a fresh console, alongside the `DJANGO_DB_*` exports — which is the argument f
 | `(1146, "Table 'USER$onboarding.application_application' doesn't exist")` | `migrate` ran against SQLite, not MySQL | Export the `DJANGO_DB_*` variables, re-run `migrate` |
 | Site works but **all applicants are missing** | The console created a stray `db.sqlite3` while the web app reads MySQL | `rm db.sqlite3`, export the variables, re-run `migrate`/`seed_questions` |
 | `django.db.utils.OperationalError` only on the web app | The WSGI file is missing a `DJANGO_DB_*` line | Compare it against [section 6](#6-configure-the-wsgi-file), then Reload |
+| `(1060, "Duplicate column name 'decision'")` — or `table … already exists` — during `migrate` | The **schema is ahead of the migration ledger**: the column is there but `django_migrations` has no row for the migration that adds it, usually because the migration files were renumbered after this database was built | Back up, then `python manage.py repair_migrations` (reports) and `--apply` (fixes). See [Repairing a migration history](#repairing-a-migration-history) below |
+
+### Repairing a migration history
+
+`migrate` failing with **`Duplicate column name`** or **`table … already exists`** does not mean the
+database is corrupt. It means the schema and the ledger disagree: the column exists, but
+`django_migrations` has no row saying which migration created it, so Django tries to add it again.
+The usual cause is a database built by one generation of migration files that were later renumbered
+or rewritten.
+
+The fix is to record the already-present migrations as applied and run the genuine remainder. Doing
+that by hand means picking the right `--fake` target, and faking one migration too many leaves Django
+believing in a column that does not exist — which fails later, and further from the cause. So the
+choice is made for you:
+
+```bash
+mysqldump -u MAPDET -h MAPDET.mysql.pythonanywhere-services.com -p \
+  'MAPDET$onboarding' > ~/backup-before-repair.sql     # single quotes: the $ is part of the name
+
+python manage.py repair_migrations            # report the plan, change nothing
+python manage.py repair_migrations --apply    # fake what is present, migrate the rest
+```
+
+It compares every pending migration against the live schema and prints what it will do to each,
+then — with `--apply` — fakes up to the last migration that is demonstrably already there and applies
+everything after it for real. **It refuses** rather than guessing in two cases:
+
+* a migration only **partly** present (some columns there, some not). Neither faking nor applying is
+  correct, so it names the missing columns and stops.
+* a **gap behind** the frontier — an early migration entirely absent while a later one is applied.
+  The two diverged out of order, and faking over the gap would skip real schema changes.
+
+In both cases nothing is changed and the message says what it found. Restore the backup and fix by
+hand from there.
+
+> The reasoning lives in `application/migration_repair.py` as a pure function over "what does this
+> migration add" and "is that in the database", so it is tested against half-applied and
+> out-of-order histories rather than only against a healthy one (`application/tests_migrations.py`).
 
 ### Releases that appear to work but change nothing
 
