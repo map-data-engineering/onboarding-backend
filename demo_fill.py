@@ -2,17 +2,18 @@
 """
 Demo API fill for the onboarding application flow.
 
-Drives the public API exactly like a real client would, through all seven steps:
+Drives the public API exactly like a real client would, in the order the portal now
+uses -- the work step comes BEFORE the knowledge check, and is what unlocks it:
     1. POST /api/applications/                       -> create applicant (details only)
     2. POST /api/applications/<id>/eligibility/       -> the four practical questions
     3. POST /api/applications/<id>/experience/        -> experience and plans
     4. GET/POST /api/applications/<id>/claims/        -> the honesty check
-    5. POST /api/applications/<id>/quiz/start/        -> build the shuffled session
+    5. POST /api/applications/<id>/finalize/          -> written answers, motivation + CV
+    6. POST /api/applications/<id>/quiz/start/        -> build the shuffled session
        GET  /api/quiz/<session>/current/             -> fetch the current question
        POST /api/quiz/<session>/answer/              -> submit an answer  (repeat)
-       GET  /api/quiz/<session>/result/              -> final score
-    6. POST /api/applications/<id>/finalize/          -> written answers + CV
-                                                        (only if the score passed)
+       GET  /api/quiz/<session>/result/              -> final score, graded against the
+                                                        pass mark but gating nothing
 
 Usage:
     # 1. start the server in one terminal:
@@ -75,7 +76,8 @@ EXPERIENCE = {
     "exp_use": "Sometimes",
 }
 
-# Step 6 — collected only after the quiz has been passed.
+# Step 5 — the applicant's own work. Collected from every eligible applicant,
+# before the quiz, and no longer conditional on the score.
 FINAL_STEP = {
     "written_dataset": "One row per household surveyed in Kilombero district between 2019 and "
                        "2023, about 4,200 rows, with GPS coordinates for each homestead.",
@@ -209,6 +211,21 @@ def main():
         sys.exit(1)
     print(f"  [ok] answered for {len(claims)} functions")
 
+    print("-> Submitting the applicant's own work (written answers + CV) ...")
+    body, content_type = _encode_multipart(
+        FINAL_STEP, "cv", "ada_lovelace_cv.pdf", CV_BYTES
+    )
+    status, final = _request(
+        "POST",
+        f"{base}/api/applications/{application_id}/finalize/",
+        data=body,
+        headers={"Content-Type": content_type},
+    )
+    if status != 200:
+        print(f"[x] Work step rejected ({status}): {final}")
+        sys.exit(1)
+    print(f"  [ok] Application submitted at {final['submitted_at']} (cv={final['cv']})")
+
     print("-> Starting quiz ...")
     status, current = _request(
         "POST", f"{base}/api/applications/{application_id}/quiz/start/"
@@ -253,27 +270,13 @@ def main():
     status, result = _request("GET", f"{base}/api/quiz/{session_id}/result/")
     print(f"  [ok] Score: {result['score']} / {result['total']}  (completed_at={result['completed_at']})")
 
+    # A grade, not a gate: the application went in at step 5 and stands whatever the
+    # quiz says. Printed because it is what the panel ranks on.
     if not result.get("passed"):
         print(
-            f"  [--] Score below the pass mark ({result.get('pass_mark')}) -- "
-            f"the final step stays locked."
+            f"  [--] Below the pass mark ({result.get('pass_mark')}) -- the application "
+            f"still stands; the score is one component of the composite."
         )
-        return
-
-    print("\n-> Submitting the final step (written answers + CV) ...")
-    body, content_type = _encode_multipart(
-        FINAL_STEP, "cv", "ada_lovelace_cv.pdf", CV_BYTES
-    )
-    status, final = _request(
-        "POST",
-        f"{base}/api/applications/{application_id}/finalize/",
-        data=body,
-        headers={"Content-Type": content_type},
-    )
-    if status != 200:
-        print(f"[x] Final submission rejected ({status}): {final}")
-        sys.exit(1)
-    print(f"  [ok] Application submitted at {final['submitted_at']} (cv={final['cv']})")
 
 
 if __name__ == "__main__":

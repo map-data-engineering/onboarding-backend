@@ -6,7 +6,7 @@ from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.response import Response
 
 from . import assessment, countries, services, validators
-from .models import Application, QuizSession
+from .models import Application, PortalSettings, QuizSession
 from .serializers import (
     AnswerSerializer,
     ApplicationFinalStepSerializer,
@@ -16,6 +16,24 @@ from .serializers import (
     ExperienceSerializer,
     ResultSerializer,
 )
+
+
+CLOSED_DETAIL = (
+    "Applications for this round closed on {deadline}. We expect to run further "
+    "courses — please write to us to be added to the mailing list."
+)
+
+
+def _closed_response(portal):
+    """The 403 every intake endpoint returns once the deadline has passed."""
+    return Response(
+        {
+            "detail": CLOSED_DETAIL.format(deadline=portal.deadline_display),
+            "applications_open": False,
+            "deadline": portal.deadline_display,
+        },
+        status=status.HTTP_403_FORBIDDEN,
+    )
 
 
 @api_view(["GET"])
@@ -28,10 +46,17 @@ def portal_config(request):
     "4 MB" while the upload endpoint enforces 5, or say "twelve questions" after
     the quota changed. The page is copy; this is the source of truth.
     """
+    portal = PortalSettings.load()
     return Response(
         {
             "contact_email": assessment.portal_setting("CONTACT_EMAIL"),
-            "deadline": assessment.portal_setting("DEADLINE"),
+            # Both the sentence to print and the machine-readable date, so the
+            # page can say "Applications close Sunday 30 August 2026" without
+            # formatting a date itself, and the API and the page can never
+            # disagree about when intake stops (they read the same row).
+            "deadline": portal.deadline_display,
+            "deadline_date": portal.application_deadline.isoformat(),
+            "applications_open": portal.is_open,
             "duration": assessment.portal_setting("DURATION"),
             "funding_gate": assessment.funding_gate(),
             "limits": {
@@ -53,7 +78,15 @@ def application_create(request):
 
     The CV, motivation and expectations are collected later — see
     application_finalize.
+
+    Refused once the deadline set in the panel has passed. Enforced here and not
+    only in the page, because the applicant page is cached in browsers and a
+    stale copy would otherwise keep taking submissions after intake closed.
     """
+    portal = PortalSettings.load()
+    if not portal.is_open:
+        return _closed_response(portal)
+
     serializer = ApplicationSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     serializer.save()
@@ -81,6 +114,9 @@ def application_status(request, application_id):
                 "eligibility": bool(application.elig_attend),
                 "experience": bool(application.exp_rfreq),
                 "claims": bool(application.claims),
+                # The work step now comes before the knowledge check, so a reload
+                # part-way through has to know whether it was submitted.
+                "written": application.final_submitted_at is not None,
             },
             "quiz": ResultSerializer(session).data if session else None,
         }
@@ -174,27 +210,34 @@ def application_claims(request, application_id):
 @parser_classes([MultiPartParser, FormParser])
 def application_finalize(request, application_id):
     """
-    Final submission: motivation, expectations and the CV upload.
+    The applicant's own work: written answers, motivation, expectations and the CV.
 
-    Gated server-side — the applicant must have finished the quiz with a score of
-    at least services.PASS_MARK. The client hiding the form is not enough.
+    This is now step 5, *before* the knowledge check, and it is no longer gated on
+    the quiz at all. It used to require a finished quiz scoring at least
+    PASS_MARK, which meant an applicant who got 7 of 14 never uploaded a CV and
+    never wrote a word the panel could read -- so the only record of them was a
+    number, and every borderline case was decided by that number alone. The score
+    is still computed, still graded against PASS_MARK, and still shown on the
+    record (Application.status, the BELOW-PASS flag, the panel's pass/fail
+    filter); it just no longer decides who gets to apply.
+
+    Still refused after the deadline, and still refused twice: the quiz is
+    unlocked by this step, so re-submitting would rewrite the written answers of
+    someone already part-way through their questions.
     """
     application = get_object_or_404(Application, pk=application_id)
-    session = getattr(application, "quiz", None)
 
-    if session is None or not session.is_complete:
+    portal = PortalSettings.load()
+    if not portal.is_open:
+        return _closed_response(portal)
+
+    if application.ineligible_reason:
         return Response(
-            {"detail": "Complete the knowledge check before submitting your application."},
-            status=status.HTTP_403_FORBIDDEN,
+            {"detail": application.ineligible_reason}, status=status.HTTP_403_FORBIDDEN
         )
-    if not services.has_passed(session):
+    if not application.claims:
         return Response(
-            {
-                "detail": (
-                    f"A score of at least {services.PASS_MARK} is required to "
-                    f"complete your application."
-                )
-            },
+            {"detail": "Please complete the earlier steps before submitting your work."},
             status=status.HTTP_403_FORBIDDEN,
         )
     if application.final_submitted_at is not None:
@@ -220,11 +263,31 @@ def application_finalize(request, application_id):
 
 @api_view(["POST"])
 def quiz_start(request, application_id):
-    """Create the shuffled session for an application and return the first question."""
+    """
+    Create the shuffled session for an application and return the first question.
+
+    The knowledge check is the last step now, so it needs the work step behind it:
+    an applicant who could start the quiz first would face a timed section before
+    ever being asked for the CV they were told to have ready, and abandoning
+    half-way would leave a record with a score and nothing else on it.
+    """
     application = get_object_or_404(Application, pk=application_id)
     if application.ineligible_reason:
         return Response(
             {"detail": application.ineligible_reason}, status=status.HTTP_403_FORBIDDEN
+        )
+    # Already sitting the quiz? build_session raises on a second session anyway,
+    # so let that path through rather than blocking a resume on an older record
+    # created before the work step moved.
+    if application.final_submitted_at is None and not hasattr(application, "quiz"):
+        return Response(
+            {
+                "detail": (
+                    "Please submit your own work — the written answers and your CV — "
+                    "before starting the knowledge check."
+                )
+            },
+            status=status.HTTP_403_FORBIDDEN,
         )
     session = services.build_session(application)
     item = services.current_item(session)

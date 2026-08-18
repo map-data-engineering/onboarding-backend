@@ -14,7 +14,7 @@ from rest_framework.exceptions import ValidationError
 from .models import PASS_MARK, QuizSession, SessionQuestion, Question
 
 # Extra seconds allowed on top of the question limit to absorb network latency,
-# so a genuine answer sent at ~25s isn't rejected because it arrived at 25.6s.
+# so a genuine answer sent at ~30s isn't rejected because it arrived at 30.6s.
 GRACE_SECONDS = 3
 
 # PASS_MARK lives in models.py -- Application.status is derived from it too -- and
@@ -34,7 +34,14 @@ __all__ = [
 
 
 def has_passed(session):
-    """True once the quiz is finished with at least PASS_MARK correct answers."""
+    """
+    True once the quiz is finished with at least PASS_MARK correct answers.
+
+    A grade, no longer a gate: it is reported on the result screen and drives
+    Application.status, the BELOW-PASS flag and the panel's pass/fail filter, but
+    nothing in the applicant journey is withheld on the strength of it (see
+    views.application_finalize).
+    """
     return session.is_complete and session.score >= PASS_MARK
 
 

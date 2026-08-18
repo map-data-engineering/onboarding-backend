@@ -214,62 +214,19 @@
   <div class="actions"><button class="btn" data-next>Continue</button></div>
 </template>
 
-<template id="tpl-quiz-intro">
-  <h1>Knowledge check</h1>
-  {% comment %}
-    The count and the timings are filled in from /api/config/ rather than written
-    here: they follow the draw quota and the question bank, and this page said
-    "Twelve multiple-choice questions" through three changes to the question set.
-  {% endcomment %}
-  <p class="lead" data-shape></p>
-  <ul class="tight">
-    <li><strong data-timing></strong> per question — the countdown is enforced by the server.</li>
-    <li>You <strong>cannot</strong> go back, and the check cannot be restarted.</li>
-    <li>Each applicant gets a <strong>different draw</strong> of questions, with the
-      answer options shuffled.</li>
-    <li>You are not told which answers were right — only your final score.</li>
-  </ul>
-  <div class="note">
-    Answer from your own knowledge. The point is to place you on the course, not to
-    filter people out on trivia.
-  </div>
-  <div class="err hidden" data-alert></div>
-  <div class="actions"><button class="btn" data-next>Start the knowledge check</button></div>
-</template>
-
-<template id="tpl-question">
-  <div class="qmeta">
-    <span data-progress></span>
-    <span class="cat" data-category></span>
-    <span class="countdown" data-countdown>--</span>
-  </div>
-  <div class="bar"><i data-bar></i></div>
-  <p class="qstem" data-stem></p>
-  <pre class="code hidden" data-code></pre>
-  <div data-options></div>
-  <div class="actions">
-    <button class="btn" data-submit disabled>Submit answer</button>
-    <span class="muted" data-status></span>
-  </div>
-</template>
-
-<template id="tpl-result">
-  <div class="centred">
-    <h1 data-title>Knowledge check complete</h1>
-    <p class="score-big"><span data-score>0</span> / <span data-total>0</span></p>
-    <p class="lead" data-message></p>
-    <p class="muted" data-completed></p>
-  </div>
-  <div class="actions" data-continue-wrap style="justify-content:center">
-    <button class="btn" data-next>Continue to your own work</button>
-  </div>
-</template>
-
+{% comment %}
+  Step 5, and deliberately before the knowledge check. It used to come after, and
+  only for applicants who beat the pass mark, which meant the panel had a bare
+  score and nothing else for everyone else — no CV, no motivation, no code. Asking
+  for it first also means the timed section is the last thing that happens, so
+  nobody meets a countdown before being asked for the file they were told to have
+  ready.
+{% endcomment %}
 <template id="tpl-written">
   <h1>Your own work</h1>
   <p class="lead">
-    Three short answers and your CV. These are read by the selection panel — please
-    answer in your own words.
+    Three short answers, your motivation and your CV. These are read by the selection
+    panel — please answer in your own words. The timed knowledge check comes after this.
   </p>
 
   <label>1. Describe a dataset you have personally analysed <span class="req">*</span></label>
@@ -324,16 +281,64 @@
   <div class="field-error" data-error="cv"></div>
 
   <div class="err hidden" data-alert></div>
-  <div class="actions"><button class="btn" data-next>Submit application</button></div>
+  <div class="actions">
+    <button class="btn" data-next>Submit and continue to the knowledge check</button>
+  </div>
 </template>
 
-<template id="tpl-done">
+<template id="tpl-quiz-intro">
+  <h1>Knowledge check</h1>
+  <div class="note">
+    <strong>Your application is already submitted.</strong> This last step is scored and
+    shown to the panel alongside everything else you have written — it is not a gate,
+    and a low score does not withdraw your application.
+  </div>
+  {% comment %}
+    The count and the timings are filled in from /api/config/ rather than written
+    here: they follow the draw quota and the question bank, and this page said
+    "Twelve multiple-choice questions" through three changes to the question set.
+  {% endcomment %}
+  <p class="lead" data-shape></p>
+  <ul class="tight">
+    <li><strong data-timing></strong> per question — the countdown is enforced by the server.</li>
+    <li>You <strong>cannot</strong> go back, and the check cannot be restarted.</li>
+    <li>Each applicant gets a <strong>different draw</strong> of questions, with the
+      answer options shuffled.</li>
+    <li>You are not told which answers were right — only your final score.</li>
+  </ul>
+  <div class="note">
+    Answer from your own knowledge. The point is to place you on the course, not to
+    filter people out on trivia.
+  </div>
+  <div class="err hidden" data-alert></div>
+  <div class="actions"><button class="btn" data-next>Start the knowledge check</button></div>
+</template>
+
+<template id="tpl-question">
+  <div class="qmeta">
+    <span data-progress></span>
+    <span class="cat" data-category></span>
+    <span class="countdown" data-countdown>--</span>
+  </div>
+  <div class="bar"><i data-bar></i></div>
+  <p class="qstem" data-stem></p>
+  <pre class="code hidden" data-code></pre>
+  <div data-options></div>
+  <div class="actions">
+    <button class="btn" data-submit disabled>Submit answer</button>
+    <span class="muted" data-status></span>
+  </div>
+</template>
+
+<template id="tpl-result">
   <div class="centred">
-    <h1>Application submitted</h1>
-    <p class="lead">
-      Thank you — your answers and CV have been received. The selection panel will be
-      in touch by email.
-    </p>
+    <h1 data-title>Knowledge check complete</h1>
+    <p class="score-big"><span data-score>0</span> / <span data-total>0</span></p>
+    <p class="lead" data-message></p>
+    <p class="muted" data-completed></p>
+  </div>
+  <div class="actions" data-continue-wrap style="justify-content:center">
+    <button class="btn" data-next>Continue to your own work</button>
   </div>
 </template>
 

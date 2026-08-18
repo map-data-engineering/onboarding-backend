@@ -40,6 +40,29 @@
       <button class="btn btn-ghost btn-sm" id="go-shortlist">Build a shortlist &rarr;</button>
     </div>
 
+    {% comment %}
+      Round settings. The deadline used to be a string in settings.PORTAL, so moving
+      it meant a code change and a redeploy -- which is how the portal ended up
+      taking applications for a week after the date it was displaying. Changing it
+      here closes intake and updates the applicant page at once, because both read
+      the same row.
+    {% endcomment %}
+    <div class="card" id="settings-card">
+      <h2>Applications deadline</h2>
+      <p class="lead" id="set-state"></p>
+      <div class="err hidden" id="set-alert"></div>
+      <div class="toolbar">
+        <label for="set-deadline" class="muted">Last day applications are accepted</label>
+        <input type="date" id="set-deadline" style="max-width:200px">
+        <button class="btn btn-sm" id="set-save">Save deadline</button>
+        <span class="muted" id="set-saved"></span>
+      </div>
+      <p class="hint">
+        Inclusive: applicants can start and submit all day on this date. From the next
+        day the portal refuses new applications and new submissions, and says so.
+      </p>
+    </div>
+
     <div class="toolbar">
       <input class="grow" type="text" id="search-input" placeholder="Name, email or institution…">
       <select id="status-filter" style="max-width:190px">

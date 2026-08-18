@@ -1,6 +1,31 @@
 from django.contrib import admin
 
-from .models import Application, Question, QuizSession, SessionQuestion
+from .models import Application, PortalSettings, Question, QuizSession, SessionQuestion
+
+
+@admin.register(PortalSettings)
+class PortalSettingsAdmin(admin.ModelAdmin):
+    """
+    The single row holding the application deadline.
+
+    Also editable from the staff panel, which is where staff are told to change
+    it; this is the fallback for a superuser who is already in /admin/.
+    """
+
+    list_display = ("application_deadline", "is_open", "updated_at")
+    readonly_fields = ("updated_at",)
+
+    @admin.display(boolean=True, description="Accepting applications")
+    def is_open(self, portal):
+        return portal.is_open
+
+    def has_add_permission(self, request):
+        # Singleton: add the row by opening the panel (or the API), never by hand,
+        # so a second row can't appear and disagree with the first.
+        return not PortalSettings.objects.exists()
+
+    def has_delete_permission(self, request, obj=None):
+        return False
 
 
 @admin.register(Question)

@@ -1,15 +1,117 @@
 import uuid
+from datetime import date
 
+from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
-# Minimum score that counts as a pass: it unlocks the final step (motivation,
-# expectations, CV) and drives Application.status. An absolute count, not a
-# percentage -- revisit it if the size of the draw changes.
+# The benchmark the knowledge check is graded against: it drives
+# Application.status, the BELOW-PASS flag and the panel's pass/fail filter. An
+# absolute count, not a percentage -- revisit it if the size of the draw changes.
 #
 # 8 of the 14 questions drawn per applicant (settings.PORTAL["QUOTA"]), i.e. the
 # same 57% bar as the previous 7-of-12 paper. Because status is derived on read,
 # changing this re-grades everyone, including applications already submitted.
+#
+# It is a grade, NOT a gate. Scoring below it no longer stops anyone submitting:
+# an applicant who cannot answer eight quiz questions may still be the right
+# person in the room, and the panel is better placed to weigh a 6/14 against a
+# strong CV than a hard cut-off is. See views.application_finalize.
 PASS_MARK = 8
+
+# Fallback deadline for the round, used as the initial value of
+# PortalSettings.application_deadline. Staff change the live value from the panel
+# (or the Django admin); this is only what a fresh database starts with, and it
+# must stay a plain literal-ish callable because migrations serialise it.
+FALLBACK_DEADLINE = date(2026, 8, 30)
+
+
+def default_deadline():
+    """
+    The deadline a fresh install starts with: PORTAL["DEADLINE"] or 30 Aug 2026.
+
+    Read at call time (not at import) so a deployment can seed a different date
+    through the environment without a migration, and so tests can override it.
+    """
+    raw = (settings.PORTAL.get("DEADLINE") or "").strip()
+    if raw:
+        try:
+            return date.fromisoformat(raw)
+        except ValueError:
+            # A malformed PORTAL_DEADLINE must not take the portal down: fall
+            # back to the literal rather than raising on every model default.
+            pass
+    return FALLBACK_DEADLINE
+
+
+class PortalSettings(models.Model):
+    """
+    The one row of round-specific configuration staff can change themselves.
+
+    The deadline used to be a string in settings.PORTAL, which meant moving it
+    was a code change and a redeploy -- so in practice it went stale and the
+    portal kept accepting applications after the date it was advertising. Keeping
+    it in the database lets the panel move it, and lets the API close intake on
+    the date the applicant page is displaying, because both read this row.
+    """
+
+    # Singleton: always pk=1, so there is exactly one answer to "when does this
+    # close?" and no way to end up with two rows disagreeing.
+    SINGLETON_PK = 1
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=SINGLETON_PK)
+    application_deadline = models.DateField(
+        default=default_deadline,
+        help_text=(
+            "Last day applications are accepted, inclusive. Applicants can start "
+            "and submit all day on this date; intake closes the following midnight."
+        ),
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "portal settings"
+        verbose_name_plural = "portal settings"
+
+    def __str__(self):
+        return f"Applications close {self.application_deadline.isoformat()}"
+
+    def save(self, *args, **kwargs):
+        self.pk = self.SINGLETON_PK  # never allow a second row
+        # A freshly constructed instance still has _state.adding set, so Django
+        # would INSERT and collide with the row already holding pk=1. Saving
+        # PortalSettings(application_deadline=…) should overwrite the singleton,
+        # which is the whole point of pinning the primary key.
+        if self._state.adding and type(self).objects.filter(pk=self.pk).exists():
+            self._state.adding = False
+        return super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        """The settings row, created with the defaults on first use."""
+        row, _ = cls.objects.get_or_create(pk=cls.SINGLETON_PK)
+        return row
+
+    @property
+    def is_open(self):
+        """
+        Whether applications are still being accepted.
+
+        Compared against the local date rather than a timestamp: the deadline is
+        advertised as a day, so it stays open for the whole of that day in the
+        project's timezone instead of expiring at an hour nobody was told about.
+        """
+        return timezone.localdate() <= self.application_deadline
+
+    @property
+    def deadline_display(self):
+        """"Sunday 30 August 2026" — what the applicant page prints."""
+        return self.application_deadline.strftime("%A %d %B %Y").replace(" 0", " ")
+
+
+def applications_open():
+    """Shorthand for PortalSettings.load().is_open."""
+    return PortalSettings.load().is_open
 
 
 class Question(models.Model):
@@ -32,7 +134,10 @@ class Question(models.Model):
     options = models.JSONField(help_text="List of option strings shown to the applicant.")
     # Must match one of the strings in `options` exactly. NEVER exposed to the client.
     correct_answer = models.CharField(max_length=255)
-    time_limit_seconds = models.PositiveIntegerField(default=25)
+    # 30 seconds per question. Long enough to read a scenario item and think,
+    # short enough that looking an unfamiliar result up on a second device and
+    # evaluating it does not fit -- which is the entire point of the clock.
+    time_limit_seconds = models.PositiveIntegerField(default=30)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -100,22 +205,25 @@ class Application(models.Model):
     # names offered are invented; claiming one is what this step measures.
     claims = models.JSONField(default=dict, blank=True)
 
-    # --- Step 6: the applicant's own work -----------------------------------
-    # Collected in the final step, only from applicants who pass the quiz.
+    # --- Step 5: the applicant's own work -----------------------------------
+    # Collected before the knowledge check, from every eligible applicant. It used
+    # to sit after the quiz and be unlocked only by a passing score, which meant
+    # the panel never saw the CV or the motivation of anyone who scored 7.
     written_dataset = models.TextField(blank=True)      # a dataset they analysed
     written_code = models.TextField(blank=True)         # 5-15 lines of their own R
     written_why_not_ols = models.TextField(blank=True)  # why OLS would be a poor choice
     written_other = models.TextField(blank=True)        # anything else for the panel
 
-    # Also step 6. Capped at 300 words each by the serializer (not at the DB
+    # Also step 5. Capped at 300 words each by the serializer (not at the DB
     # level, so the limit can change without a migration).
     motivation = models.TextField(blank=True)
     expectations = models.TextField(blank=True)
 
-    # File upload — also collected in the final step (see PASS_MARK in services.py).
+    # File upload — also collected in the "your own work" step.
     cv = models.FileField(upload_to="cvs/", blank=True)
 
-    # Set when the applicant completes the final step (motivation/expectations/CV).
+    # Set when the applicant completes the work step (motivation/expectations/CV),
+    # which is also what unlocks the knowledge check.
     final_submitted_at = models.DateTimeField(null=True, blank=True)
 
     # Staff review outcome (set from the staff panel).

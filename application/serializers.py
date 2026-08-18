@@ -17,8 +17,8 @@ class ApplicationSerializer(serializers.ModelSerializer):
     Step 1 of the journey: contact + profile only.
 
     Motivation, expectations and the CV are deliberately NOT accepted here — they
-    are collected in the final step, and only from applicants who score at least
-    PASS_MARK on the quiz (see ApplicationFinalStepSerializer).
+    are collected in the work step, just before the knowledge check (see
+    ApplicationFinalStepSerializer).
     """
 
     # Both are dropdowns on the form; validating against the same list here is
@@ -68,7 +68,7 @@ class ExperienceSerializer(serializers.ModelSerializer):
 
 
 class ApplicationFinalStepSerializer(serializers.ModelSerializer):
-    """Step 6 — the applicant's own work, motivation and expectations, plus the CV."""
+    """Step 5 — the applicant's own work, motivation and expectations, plus the CV."""
 
     class Meta:
         model = Application
@@ -186,7 +186,10 @@ class AnswerSerializer(serializers.Serializer):
 class ResultSerializer(serializers.ModelSerializer):
     score = serializers.IntegerField(read_only=True)
     total = serializers.IntegerField(read_only=True)
-    # Tells the client whether to show the final step (CV + free text).
+    # Whether the score reached the benchmark. Reported, not enforced: the written
+    # answers and the CV are collected before the quiz now, so this no longer
+    # unlocks (or locks) anything for the applicant -- it is the grade the panel
+    # sees, and what the result screen prints alongside the score.
     passed = serializers.SerializerMethodField()
     pass_mark = serializers.SerializerMethodField()
     application = serializers.UUIDField(source="application_id", read_only=True)

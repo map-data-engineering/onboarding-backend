@@ -196,6 +196,15 @@ os.environ["DJANGO_DB_USER"] = PA_USER
 os.environ["DJANGO_DB_PASSWORD"] = "PASTE_YOUR_MYSQL_PASSWORD_HERE"
 os.environ["DJANGO_DB_HOST"] = f"{PA_USER}.mysql.pythonanywhere-services.com"
 
+# Portal copy and selection rules. All optional -- settings.py has working
+# defaults -- but this is where they belong, so a change survives a git pull.
+# FUNDING_GATE "1" stops an applicant who cannot fund their own travel at the
+# eligibility step; "0" lets them apply, flagged UNFUNDED for the panel to judge.
+os.environ["PORTAL_DEADLINE"] = "2026-08-30"   # ISO date; only seeds a NEW database
+os.environ["PORTAL_CONTACT_EMAIL"] = "cmyalla@ihi.or.tz"
+os.environ["PORTAL_DURATION"] = "about 15 minutes"
+os.environ["PORTAL_FUNDING_GATE"] = "1"
+
 # Start Django
 from django.core.wsgi import get_wsgi_application
 application = get_wsgi_application()
@@ -224,6 +233,10 @@ Set `PA_USER`/`PA_PROJECT`, paste the secret key from step 3 and the MySQL passw
 | `DJANGO_DB_NAME` / `_USER` / `_PASSWORD` / `_HOST` | MySQL connection details from step 4 |
 | `DJANGO_DB_PORT` | Optional, defaults to `3306` |
 | `DJANGO_DB_CONN_MAX_AGE` | Optional, defaults to `60` seconds — see below |
+| `PORTAL_DEADLINE` | Optional — ISO date (`YYYY-MM-DD`) a **fresh database** starts with. The live deadline is a database row staff edit in the panel, so changing this later has no effect (see [section 13](#13-the-deadline-the-pass-mark-and-applicant-status)) |
+| `PORTAL_CONTACT_EMAIL` | Optional — shown on the exit screens, so a blocked applicant can ask to join the mailing list |
+| `PORTAL_DURATION` | Optional — how long the application takes; set it honestly, a surprise timed section collects abandoned forms |
+| `PORTAL_FUNDING_GATE` | Optional, defaults to `1`. `0` lets an applicant who cannot fund their own travel apply anyway, flagged `UNFUNDED`. A decision worth making deliberately: a hard gate excludes junior and lower-resourced applicants disproportionately |
 
 > **Why `CONN_MAX_AGE=60`?** Reusing connections avoids a TCP + auth handshake on every request, but
 > PythonAnywhere's MySQL closes idle connections after ~300s. Holding them longer than that hands
@@ -270,10 +283,12 @@ curl -H "Authorization: Token YOUR_TOKEN" -OJ \
      https://MAPDET.pythonanywhere.com/api/admin/applications/<id>/cv/
 ```
 
-> **Note:** CVs are uploaded at the *end* of the journey, and only by applicants who pass the quiz
-> (see [section 13](#13-the-pass-mark-gate-and-applicant-status)). An applicant who scored below the
-> pass mark has no CV at all — the panel shows no download link for them. That is expected, not a
-> broken mapping.
+> **Note:** CVs are uploaded *before* the knowledge check, by every eligible applicant — a low
+> score no longer means a missing CV (see
+> [section 13](#13-the-deadline-the-pass-mark-and-applicant-status)). An applicant with no CV
+> either abandoned the application before that step or was ruled out at the eligibility gate.
+> Records created before that change can still be Fail-with-no-CV; that is history, not a broken
+> mapping.
 
 > Optionally, you may also map `/static/` → `/home/MAPDET/onboarding-backend/staticfiles` so
 > PythonAnywhere serves static files directly (slightly faster than WhiteNoise). It is not required.
@@ -328,12 +343,19 @@ page of traceback — if the name, password or host is wrong. Fix it before cont
 ```bash
 python manage.py migrate                    # create the tables in MySQL
 python manage.py collectstatic --noinput    # gather static files for WhiteNoise
-python manage.py seed_questions             # load the 12 quiz questions
+python manage.py seed_questions             # load the 24-question bank
 python manage.py createsuperuser            # create your staff / admin login
 ```
 
 `createsuperuser` prompts for a username, email, and password — this account can sign in to both the
-staff panel (`/panel/`) and the Django admin (`/admin/`), with full reviewer rights.
+staff panel (`/panel/`) and the Django admin (`/admin/`), with full rights.
+
+**Make at least one superuser, and mind who else gets one.** The **CSV exports and the shortlist
+builder are superuser-only**: a plain `is_staff` account can read every application, download CVs,
+set decisions and move the deadline, but cannot download the applicant table or run the ranking.
+Those are the two actions whose output leaves the panel, so they are granted deliberately rather
+than by handing out a staff login. Ordinary reviewers can be created in the Django admin with
+**Staff status** ticked and **Superuser status** left off.
 
 **Optional — a read-only account** for colleagues who should see applicants but change nothing:
 
@@ -342,10 +364,11 @@ python manage.py create_viewer amina --email amina@example.org
 ```
 
 It prompts for a password. The account can sign in to `/panel/` and browse counts, the applicant
-list, details, CV downloads and quiz breakdowns, but **cannot** set decisions, run bulk actions,
-delete, or export the CSV — the panel hides those controls and the API returns 403 either way. Use
-`--revoke` to promote one to a full reviewer later. (Membership of the "Applicant viewers" group is
-what marks the account, so you can also flip it from Django admin.)
+list, details, CV downloads and quiz breakdowns, but **cannot** set decisions, run bulk actions or
+delete — the panel hides those controls and the API returns 403 either way. Exports and the
+shortlist are out of reach for viewers *and* reviewers alike; only superusers see them. Use
+`--revoke` to promote a viewer to a full reviewer later. (Membership of the "Applicant viewers"
+group is what marks the account, so you can also flip it from Django admin.)
 
 **If step 8b reported a problem, read this before retrying:**
 
@@ -376,11 +399,39 @@ On the **Web** tab, click the green **Reload** button, then open:
 
 The frontend and API share one origin, so the pages call `/api/...` directly with no CORS setup.
 
-**Smoke-test the whole journey** before announcing the URL: open the portal, fill in the details form,
-click Next, answer the quiz, and confirm that a score of 7+ unlocks the final CV/motivation step and
-that the CV downloads from the staff panel afterwards. Note: the CV must be a PDF (max 2 pages), and 
-motivation/expectations are required (max 300 words each). That exercises MySQL writes, the CV download
-endpoint and the pass-mark gate in one pass.
+**Check what the server thinks it is serving** — one URL answers most "did the release land?"
+questions:
+
+`https://MAPDET.pythonanywhere.com/api/config/` should report the current bank and pass mark:
+
+```json
+"quiz": { "questions": 14, "bank_size": 24, "seconds_min": 30, "seconds_max": 30, "pass_mark": 8 }
+```
+
+If `bank_size` describes the previous release, `seed_questions` did not run against MySQL — or the
+`git pull` never landed (see [section 10](#10-deploying-updates-later)).
+
+**Then smoke-test the whole journey** before announcing the URL:
+
+1. Open the portal. The **Before you begin** screen appears, with a disabled start button until all
+   four boxes are ticked, and the two country fields are dropdowns with Tanzania pinned at the top.
+2. Fill in the details form and click Next. A phone number without a `+` should be rejected with an
+   explanation — that confirms you are running the current validation.
+3. Submit the **work step** — written answers, motivation and a PDF CV (max 2 pages, 5 MB;
+   motivation and expectations max 300 words each). It comes *before* the quiz and unlocks it.
+4. Answer the quiz. Whatever you score, the application stands — the score is a grade for the panel,
+   and the result screen should say the application is complete.
+5. In `/panel/`, signed in **as a superuser**, click **Build a shortlist**: the stat tiles, floor pills
+   and ranked table must render, and **Export shortlist + waitlist** must download a CSV. Buttons
+   that do nothing here mean stale static files, not a code problem — run `collectstatic` and Reload.
+   Signed in as an ordinary staff account, the **Build a shortlist** and **Export CSV** buttons should
+   not be there at all.
+6. Check the **deadline card** above the applicants table shows the closing date for this round, and
+   set it if not.
+7. Download the CV from the applicant's detail page.
+
+That exercises MySQL writes, the question draw, the step order, the deadline, the CV download
+endpoint, the role restrictions and the shortlist builder in one pass.
 
 ---
 
@@ -394,22 +445,85 @@ target SQLite:
 export PA_USER=MAPDET PA_PROJECT=onboarding-backend
 cd ~/"$PA_PROJECT"
 workon onboarding-venv
+which python                              # MUST be under ~/.virtualenvs/ -- see below
+
 git pull
+git log --oneline -1                       # confirm the new commit is actually checked out
 
 export DJANGO_DB_ENGINE=mysql
 export DJANGO_DB_NAME="$PA_USER\$$PA_PROJECT"
 export DJANGO_DB_USER="$PA_USER"
 export DJANGO_DB_PASSWORD='your-mysql-password'
 export DJANGO_DB_HOST="$PA_USER.mysql.pythonanywhere-services.com"
+python manage.py shell -c "from django.db import connection as c; c.ensure_connection(); print('OK:', c.vendor, c.settings_dict['NAME'])"
 
 pip install -r requirements-prod.txt      # only if dependencies changed
 python manage.py migrate                  # only if there are new migrations
-python manage.py seed_questions           # only if the question list changed
+python manage.py seed_questions           # only if the question bank changed
 python manage.py collectstatic --noinput  # only if static files or templates changed
 python manage.py check                    # reports application.W001 if a static file was missed
 ```
 
 Then click **Reload** on the **Web** tab. A reload is required for any change to take effect.
+
+### Check the pull before you trust anything after it
+
+`git pull` **can fail while the rest of the block carries on running against the old code**, which
+produces the most confusing possible outcome: every command reports success, `check` says "no issues",
+the reload works, and nothing whatsoever has changed. This has happened. Two habits prevent it:
+
+- Run each step and read its output, rather than pasting the whole block and reading only the end.
+- `git log --oneline -1` after the pull: if it isn't the commit you pushed, stop.
+
+`seed_questions` is a second, independent signal — it prints what the bank now holds
+(`24 active in the bank; 14 drawn per applicant`). If it still describes the previous release, the
+pull did not land, whatever else scrolled past.
+
+### `git pull` aborts: "local changes would be overwritten"
+
+```
+error: Your local changes to the following files would be overwritten by merge:
+        onboarding/settings.py
+```
+
+Someone edited a **tracked file directly on the server**. Every future pull is blocked until that is
+resolved. Keep the change rather than destroying it — it may be the only copy of a credential:
+
+```bash
+cp onboarding/settings.py ~/settings.py.server-backup   # belt and braces
+git stash                                               # recoverable, unlike `git checkout --`
+git pull
+git stash show -p                                       # read what was actually changed
+```
+
+Do **not** `git stash pop` reflexively: a release that touches the same file will conflict. Read the
+stash, decide, then either `git stash drop` (the change is obsolete) or reapply the one value by hand.
+
+**Then stop editing tracked files on the server.** Every setting the app needs —
+`DJANGO_SECRET_KEY`, `DJANGO_ALLOWED_HOSTS`, the `DJANGO_DB_*` group, the `PORTAL_*` group — is read
+from the environment, so it belongs in the WSGI file as `os.environ["NAME"] = "value"`. That file is
+not in the repository, so it survives every pull and blocks none of them.
+
+### `No module named 'whitenoise'` (or `InvalidStorageError` naming it)
+
+```
+django.core.files.storage.handler.InvalidStorageError: Could not find backend
+'whitenoise.storage.CompressedStaticFilesStorage': No module named 'whitenoise'
+```
+
+The virtualenv is not active, so `manage.py` is running on the system Python — where the project's
+dependencies were never installed. The giveaway is a traceback whose paths are
+`/usr/local/lib/python3.13/site-packages/…` instead of `~/.virtualenvs/onboarding-venv/…`.
+
+```bash
+workon onboarding-venv        # or: source ~/.virtualenvs/onboarding-venv/bin/activate
+which python                  # ~/.virtualenvs/onboarding-venv/bin/python
+python -c "import whitenoise, rest_framework; print('venv OK')"
+```
+
+The prompt shows `(onboarding-venv)` when it is active. `workon` is the thing most easily forgotten in
+a fresh console, alongside the `DJANGO_DB_*` exports — which is the argument for putting both in
+`~/.bashrc`.
 
 > **If `check` reports `application.W001`, do not skip it.** It means `STATIC_ROOT` holds a different
 > version of a `.js`/`.css` file (or of its `.gz`) than the source, which is the one failure that
@@ -425,6 +539,17 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 > **`db.sqlite3` is git-ignored, so question and applicant data never travel with a `git pull`.**
 > After a release that changes the question list, `seed_questions` must be re-run on the server or the
 > live quiz keeps serving the old set.
+
+> **Upgrading to the shortlist release (preparation screen, 24-question bank, shortlist builder):**
+> **no migration and no new dependencies** — but three of the four release steps are mandatory.
+> `seed_questions` is required (the bank changed from 12 questions to 24, drawn 14 per applicant), and
+> `collectstatic` is required (`applicant.js`, `panel.js` and `styles.css` all changed — without it the
+> panel renders the shortlist controls with none of their JavaScript behind them). `PASS_MARK` also
+> moved from 7 to 8: because status is derived on read, that **re-grades applications already in the
+> database**, so count who it moves before you reload —
+> `python manage.py shell -c "from application.models import Application as A; print(sum(1 for a in A.objects.select_related('quiz') if getattr(a,'quiz',None) and a.quiz.is_complete and a.quiz.score==7))"`
+> — and if that number is not zero, decide deliberately whether to keep `PASS_MARK = 7` for the round
+> already underway.
 
 > **Upgrading to the signed CV download:** the panel JS changed, so **`collectstatic` is required** —
 > without it WhiteNoise keeps serving the old `panel.js`/`api.js` and the Download CV button still
@@ -453,6 +578,27 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 > automatically: the portal validates the stored id against `/api/applications/{id}/status/` on load
 > and restarts them at the details form if it is stale.
 
+> **Upgrading to the admin-set deadline, 30-second questions and the reordered journey:** this release
+> ships migration `0009_portalsettings_question_time_limit_30s`, so `migrate` is **required**, and both
+> `applicant.js` and `panel.js` changed, so `collectstatic` is too. Read this before releasing mid-round
+> — it changes three things applicants can see:
+>
+> - **The deadline** moves into a database row created by the migration, defaulting to **30 August
+>   2026** (or `PORTAL_DEADLINE` if that is set to an ISO date). **Check it in the panel immediately
+>   after the reload**: if the round you are running closes on a different date, the portal will
+>   otherwise advertise — and enforce — the default. `PORTAL_DEADLINE` is ignored from then on.
+> - **Every question in the bank is set to 30 seconds** by the migration, up from 25, including
+>   questions already seeded. Questions **already served** keep the limit they were served under, so
+>   nobody mid-quiz gains or loses time.
+> - **"Your work" now comes before the knowledge check** and is what unlocks it, and a score below
+>   `PASS_MARK` no longer blocks submission. Applicants part-way through are handled: anyone who has
+>   already started a quiz keeps their session, and anyone who finished one but never reached the work
+>   step is offered it from the result screen. `Application.status` is unchanged — Pass/Fail still mean
+>   what they did.
+>
+> Nothing is deleted or rewritten on existing applications: the migration adds one row, changes one
+> default, and updates `time_limit_seconds` on the question bank.
+
 ---
 
 ## 11. Troubleshooting
@@ -472,6 +618,19 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | Site works but **all applicants are missing** | The console created a stray `db.sqlite3` while the web app reads MySQL | `rm db.sqlite3`, export the variables, re-run `migrate`/`seed_questions` |
 | `django.db.utils.OperationalError` only on the web app | The WSGI file is missing a `DJANGO_DB_*` line | Compare it against [section 6](#6-configure-the-wsgi-file), then Reload |
 
+### Releases that appear to work but change nothing
+
+| Symptom | Likely cause | Fix |
+|---------|--------------|-----|
+| `error: Your local changes to the following files would be overwritten by merge` | A tracked file (usually `onboarding/settings.py`) was edited directly on the server, so `git pull` refuses — **and every command after it in a pasted block runs against the old code** | `cp` it aside, `git stash`, `git pull`, then `git stash show -p` to decide. Move the value into the WSGI file so it never blocks a pull again — see [section 10](#10-deploying-updates-later) |
+| Every step reported success, but the site is unchanged | The pull aborted (above) and the rest of the block still ran | `git log --oneline -1` — if it isn't the commit you pushed, nothing was deployed. Re-run the steps after a clean pull |
+| `seed_questions` describes the **previous** question bank | Same cause: the code on disk is old | Fix the pull, then re-run. `24 active in the bank; 14 drawn per applicant` is the current release |
+| `No module named 'whitenoise'`, or `InvalidStorageError: Could not find backend 'whitenoise.storage.CompressedStaticFilesStorage'` | The virtualenv is not active, so `manage.py` is on the system Python. Traceback paths say `/usr/local/lib/python3.13/site-packages/…` instead of `~/.virtualenvs/…` | `workon onboarding-venv`, confirm with `which python`, then re-run. The prompt shows `(onboarding-venv)` when active |
+| **Build a shortlist** or **Export CSV** is missing from the panel | The account is staff but not a superuser — both are superuser-only | Deliberate. Sign in with a superuser, or tick **Superuser status** on that account in `/admin/` if they should have it |
+| `/api/admin/shortlist/` or `/export/` returns **403** "restricted to superuser accounts" | Same cause, from a hand-made request or a standalone frontend | Same fix; the panel hides the buttons, the API is what enforces it |
+| Panel renders the shortlist controls but the buttons do nothing | `collectstatic` was skipped or crashed, so WhiteNoise is serving the previous `panel.js` (and its `.gz`) | `python manage.py check` reports `application.W001`; run `collectstatic --noinput` (or `--clear`) and Reload |
+| Applicants' Pass/Fail labels changed without anyone touching the data | `PASS_MARK` was moved and status is derived on read, so it re-graded existing applications | Deliberate if intended; otherwise restore the previous value in `application/models.py`. Nobody loses a submission over it — the CV and written answers are collected before the quiz — but the panel's Pass/Fail filter shifts under the reviewers |
+
 ### Everything else
 
 | Symptom | Likely cause | Fix |
@@ -484,8 +643,10 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 | Download CV returns **401** | The link lost its `?sig=`, or the staff token expired | Reload the applicant page to mint a fresh link; log out and back in if the whole panel 401s |
 | Download CV returns **403** "link has expired" | The page sat open longer than `CV_LINK_MAX_AGE` (15 min) | Reload the applicant detail page — that mints a new signature |
 | A panel button (Download CV, **Export CSV**, …) does nothing when clicked | The browser is running an old `panel.js` — most often a stale `panel.js.gz`, which WhiteNoise serves in preference to the plain file | Run `collectstatic --noinput`, then Reload. `manage.py check` now reports this as `application.W001` before you deploy; `curl` will *not* show it, because it does not ask for gzip |
-| An applicant has **no CV / empty motivation** | Status is **Fail**, so the final step never unlocked | Expected — check their status/score on the detail page |
-| Final step returns **403** | Quiz unfinished, or score below the pass mark | Expected — the gate is server-side (section 13) |
+| An applicant has **no CV / empty motivation** | They abandoned the application before the work step, were ruled ineligible, or the record predates the reorder (when a CV needed a passing score) | Check `final_submitted_at` and the eligibility answers on the detail page |
+| `POST /finalize/` returns **403** | Applications have closed (past the deadline), the applicant was ruled ineligible, or the honesty check is unanswered | Expected — all three are enforced server-side (section 13) |
+| `POST /quiz/start/` returns **403** | The work step (CV + motivation) has not been submitted — it is what unlocks the quiz | Expected — submit `/finalize/` first (section 13) |
+| The portal shows **"applications are closed"** | Today is past the deadline in the panel | Deliberate if the round has ended; otherwise move the date in the panel's deadline card, or `PATCH /api/admin/settings/` |
 | Portal **skips the details form** and 404s on quiz start | Stale `application_id` in the browser's `localStorage` (e.g. the applicant was deleted) | Fixed in the current release — the portal validates via `/api/applications/{id}/status/`. Make sure `collectstatic` ran and the browser reloaded the new `applicant.js` |
 | Any page returns **HTTP 500** | See the error log | **Web** tab → *Error log*; usually a missing env var or an unmigrated database |
 | `ModuleNotFoundError` | Wrong virtualenv or missing deps | Confirm the virtualenv path on the Web tab; run `pip install -r requirements-prod.txt` |
@@ -514,13 +675,37 @@ Then click **Reload** on the **Web** tab. A reload is required for any change to
 
 ---
 
-## 13. The pass-mark gate and applicant status
+## 13. The deadline, the pass mark, and applicant status
 
-The applicant journey is **two-stage**: the first form collects contact/profile details only, then
-the quiz runs, and the **motivation, expectations and CV upload are only offered to applicants who
-score at least the pass mark**.
+### The deadline is a database row, changed in the panel
 
-The pass mark is a constant in the code, not an environment variable:
+Applications close at the end of the day set in **PortalSettings** — one row, edited from the
+deadline card at the top of `/panel/` (reviewers only) or from `/admin/`. A fresh database starts at
+**30 August 2026**, or at `PORTAL_DEADLINE` if you set it before the first migration.
+
+- `GET /api/config/` reports `deadline`, `deadline_date` and `applications_open`; the applicant page
+  prints the first and shows a closed screen on the third.
+- Past the deadline, `POST /api/applications/` and `POST /api/applications/{id}/finalize/` both return
+  **403**. That is enforced server-side because the applicant page is cached in browsers, and a stale
+  copy would otherwise keep taking submissions after intake closed.
+- The date is **inclusive** — applicants can start and finish all day on it, in the server's timezone
+  (`TIME_ZONE`, UTC by default).
+- Applicants already part-way through are *not* cut off mid-quiz: `quiz/start/` and the answer
+  endpoints do not check the deadline, so someone who submitted their work before it closes can finish
+  their questions.
+
+Moving it needs no deploy, no migration and no reload — the row is read on every request.
+
+### The pass mark grades; it no longer gates
+
+The journey is **details → eligibility → experience → honesty check → their own work (CV, motivation,
+written answers) → the timed knowledge check**. The work step used to come last and be unlocked only
+by a passing score, which meant every applicant below the mark left a bare number and nothing to read.
+Now it comes first and is what unlocks the quiz, so **the panel has a complete application for
+everyone who finished, whatever they scored**.
+
+The pass mark is still computed and still visible — it drives `status`, the `BELOW-PASS` flag and the
+panel's Pass/Fail filter. It is a constant in the code, not an environment variable:
 
 ```python
 # application/models.py
@@ -533,8 +718,8 @@ To change it, edit that line, `git pull` on the server, and **Reload**. No migra
 
 | Status | Meaning |
 |--------|---------|
-| **Pass** | Quiz finished with a score **≥ 7** — the final step (PDF CV, motivation, expectations) is unlocked |
-| **Fail** | Quiz finished **below 7** — the journey ends at the results screen; no CV is ever collected |
+| **Pass** | Quiz finished with a score **≥ `PASS_MARK`** (8 of the 14 drawn) |
+| **Fail** | Quiz finished **below `PASS_MARK`** — the application still stands, with its CV and written answers, and is ranked on the composite like any other |
 | **Pending** | Quiz not started, or still in progress |
 
 The status is **computed from the score on every read**, not stored in a column. Two consequences
@@ -542,8 +727,8 @@ worth knowing:
 
 - It can never drift out of sync with the actual answers, and there is no migration or backfill when
   you change `PASS_MARK` — **every applicant is re-graded immediately** on the next page load. Raising
-  the mark to 8 will flip existing 7-scorers from Pass to Fail (applicants who already submitted keep
-  their CV; only the label changes).
+  it flips borderline scorers from Pass to Fail, but only the label changes: nobody's CV, motivation or
+  written answers are affected, because those are collected before the quiz.
 - It is separate from **`decision`** (Pending/Selected/Rejected), which is the staff's own review
   outcome and *is* stored. Status is about the quiz; decision is about your judgement.
 
@@ -551,10 +736,15 @@ Staff can see the status as a badge in the applicants table and on the detail pa
 by it (**All statuses / Pass / Fail / Pending**), and it is exposed via the API as `status` on
 `GET /api/admin/applications/` and `…/{id}/`, plus `?status=pass|fail|pending` for filtering.
 
-The gate itself is enforced in `POST /api/applications/{id}/finalize/`, which returns **403** unless
-the quiz is complete with `score >= PASS_MARK`. Hiding the form in the browser is a convenience only,
-so a tampered client still cannot upload a CV without passing.
+What *is* enforced server-side is the **order**, not the score: `POST /api/applications/{id}/quiz/start/`
+returns **403** until the work step has been submitted, and `POST /api/applications/{id}/finalize/`
+returns **403** after the deadline, for an applicant ruled ineligible, or before the honesty check is
+answered. Presenting the steps in order in the browser is a convenience; these checks are the control.
 
+> Every question in the bank allows **30 seconds** (`DEFAULT_SECONDS` in `seed_questions.py`, and the
+> `Question.time_limit_seconds` default). Changing it there and re-running `seed_questions` updates the
+> bank; already-served questions keep the limit they were served under.
+>
 > If you change the number of seeded questions in `seed_questions.py`, revisit `PASS_MARK` — it is an
 > absolute count, not a percentage. Re-running `seed_questions` after editing that list updates
 > changed questions and retires removed ones (`is_active=False`, so past quizzes stay auditable);

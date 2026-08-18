@@ -9,12 +9,12 @@ C = Question.Category
 # and an entry can still override it by adding a sixth element to its tuple.
 #
 # It is worth knowing what a flat clock costs. The longer scenario items here run to
-# four or five lines with numbers in them, and 25 seconds is tight for those --
+# four or five lines with numbers in them, and 30 seconds is tight for those --
 # tightest for the applicants reading in a second language, who are most of the
 # pool. If timeouts cluster on the same few questions (the panel flags TIMEOUTS, and
 # the per-question breakdown shows which), give those items their own longer `secs`
 # rather than raising this for everything.
-DEFAULT_SECONDS = 25
+DEFAULT_SECONDS = 30
 
 # The question bank. Each applicant sits a random draw from it -- 14 questions,
 # by the per-category quota in settings.PORTAL["QUOTA"] -- with the options
@@ -32,7 +32,7 @@ DEFAULT_SECONDS = 25
 #     reads a CSV?") is answered in five seconds by anyone with a second device,
 #     so it ranks nobody.
 #
-# Every question runs on DEFAULT_SECONDS (25s). That is far too short to search for
+# Every question runs on DEFAULT_SECONDS (30s). That is far too short to search for
 # an unfamiliar result, read it and evaluate it, which is the point of the clock.
 #
 # Nothing here tests INLA or inlabru. The published prerequisites are R plus

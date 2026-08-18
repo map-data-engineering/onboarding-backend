@@ -27,6 +27,9 @@ urlpatterns = [
     path("admin/login/", admin_views.admin_login),
     path("admin/logout/", admin_views.admin_logout),
     path("admin/me/", admin_views.admin_me),
+    # The round's settings — currently the application deadline. GET for any staff
+    # account, PATCH for reviewers.
+    path("admin/settings/", admin_views.admin_settings),
     path("admin/applications/", admin_views.admin_applications),
     # CSV of whatever ?search=/?status= currently select (reviewers only)
     path("admin/applications/export/", admin_views.admin_applications_export),

@@ -15,6 +15,7 @@ from django.contrib.auth import authenticate
 from django.http import FileResponse, Http404
 from django.shortcuts import get_object_or_404
 from django.utils import timezone
+from django.utils.dateparse import parse_date
 from rest_framework import status
 from rest_framework.authtoken.models import Token
 from rest_framework.decorators import api_view, permission_classes
@@ -30,8 +31,15 @@ from .admin_serializers import (
 from . import shortlist as shortlisting
 from .cv_links import unsign_cv_link
 from .exports import applications_csv_response
-from .models import PASS_MARK, Application
-from .permissions import CanReviewApplicants, IsStaff, can_review, is_viewer
+from .models import PASS_MARK, Application, PortalSettings
+from .permissions import (
+    CanExportApplicants,
+    CanReviewApplicants,
+    IsStaff,
+    can_export,
+    can_review,
+    is_viewer,
+)
 
 
 @api_view(["POST"])
@@ -63,17 +71,23 @@ def _user_payload(user):
     """
     Identity + capabilities.
 
-    The panel hides the decision, delete, bulk and export controls when
-    `can_review` is false. That is presentation only -- every one of those
+    The panel hides the decision, delete, bulk, export and shortlist controls
+    according to these flags. That is presentation only -- every one of those
     endpoints enforces the same rule server-side.
     """
+    exporter = can_export(user)
     return {
         "username": user.username,
         "email": user.email,
         "is_superuser": user.is_superuser,
         "role": "viewer" if is_viewer(user) else "reviewer",
         "can_review": can_review(user),
-        "can_export": can_review(user),
+        # Both are superuser-only: a CSV takes the whole applicant table out of
+        # the panel, and the shortlist is the selection itself rather than a view
+        # of it. Reported as two flags because the panel hides two sets of
+        # controls, and they may not always move together.
+        "can_export": exporter,
+        "can_shortlist": exporter,
     }
 
 
@@ -90,6 +104,61 @@ def admin_logout(request):
 def admin_me(request):
     """Return the authenticated staff user (handy for verifying a token)."""
     return Response(_user_payload(request.user))
+
+
+def _settings_payload(portal):
+    """The settings row as the panel renders it, plus the derived open/closed state."""
+    return {
+        "application_deadline": portal.application_deadline.isoformat(),
+        "deadline_display": portal.deadline_display,
+        "applications_open": portal.is_open,
+        "today": timezone.localdate().isoformat(),
+        "updated_at": portal.updated_at,
+    }
+
+
+@api_view(["GET", "PATCH"])
+@permission_classes([IsStaff])
+def admin_settings(request):
+    """
+    GET   -> the round's settings (any staff account)
+    PATCH -> move the deadline: {"application_deadline": "2026-08-30"} (reviewers only)
+
+    The deadline is the one piece of configuration that has to change between
+    rounds and cannot wait for a deploy. Applicants are refused from the day after
+    the date set here (views.application_create / application_finalize), and the
+    applicant page prints the same value, so moving it here moves both.
+    """
+    portal = PortalSettings.load()
+
+    if request.method == "PATCH":
+        if not can_review(request.user):
+            raise PermissionDenied(CanReviewApplicants.message)
+
+        raw = request.data.get("application_deadline")
+        if not raw:
+            return Response(
+                {"application_deadline": ["A date is required (YYYY-MM-DD)."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        # parse_date returns None for junk ("next Tuesday") but *raises*
+        # ValueError for a well-formed impossible date ("2026-13-40"), so both
+        # have to be handled -- catching only one turned a typo in the panel's
+        # date box into a 500.
+        try:
+            deadline = parse_date(str(raw).strip())
+        except ValueError:
+            deadline = None
+        if deadline is None:
+            return Response(
+                {"application_deadline": ["Use the format YYYY-MM-DD, e.g. 2026-08-30."]},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        portal.application_deadline = deadline
+        portal.save(update_fields=["application_deadline", "updated_at"])
+
+    return Response(_settings_payload(portal))
 
 
 class InvalidFilter(Exception):
@@ -168,14 +237,16 @@ def admin_applications(request):
 
 
 @api_view(["GET"])
-@permission_classes([CanReviewApplicants])
+@permission_classes([CanExportApplicants])
 def admin_applications_export(request):
     """
     Download the applicants matching the current filters as CSV.
 
     Takes the same ?search= and ?status= params as the list, so the file contains
-    exactly the rows on screen -- not the whole table. Restricted to reviewers:
-    view-only accounts can read records individually but not bulk-export them.
+    exactly the rows on screen -- not the whole table. **Superusers only**: any
+    staff account can read records one at a time in the panel, but a CSV is the
+    whole filtered applicant database -- names, emails, phone numbers and free
+    text -- leaving for somebody's laptop, where none of these checks apply.
     """
     try:
         qs = _filtered_applications(request)
@@ -221,7 +292,7 @@ def _shortlist_queryset():
 
 
 @api_view(["GET", "POST"])
-@permission_classes([IsStaff])
+@permission_classes([CanExportApplicants])
 def admin_shortlist(request):
     """
     Rank every application and allocate seats under the panel's floors.
@@ -233,8 +304,14 @@ def admin_shortlist(request):
       drop_bluff : bool
 
     GET returns the defaults applied to the current pool, so opening the panel
-    shows a shortlist rather than an empty form. Open to viewers: it computes a
-    ranking, it does not record a decision.
+    shows a shortlist rather than an empty form.
+
+    **Superusers only.** It records no decision, but it is not a neutral view
+    either: it is the ranking with the cut line drawn and the floors applied.
+    Circulated before the panel has met, a provisional ordering reads as the
+    outcome, and the reviewers best placed to argue with it are the ones who saw
+    it first. Reviewers read applications here; the selection is run by whoever
+    owns it.
     """
     data = request.data if request.method == "POST" else request.query_params
     options = _shortlist_options(data)
@@ -274,14 +351,14 @@ def admin_shortlist(request):
 
 
 @api_view(["POST"])
-@permission_classes([CanReviewApplicants])
+@permission_classes([CanExportApplicants])
 def admin_shortlist_export(request):
     """
     CSV of the ranking just built, with Rank, Shortlisted and Waitlisted columns.
 
     Takes the same body as the builder plus `only_shortlist`, so the panel can
-    hand over either the full ranking or the picks alone. Reviewers only, like the
-    other export.
+    hand over either the full ranking or the picks alone. Superusers only, like
+    the builder it comes from and the other export.
     """
     options = _shortlist_options(request.data)
     result = shortlisting.build_shortlist(_shortlist_queryset(), **options)

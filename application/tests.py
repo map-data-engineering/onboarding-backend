@@ -638,22 +638,80 @@ class ShortlistApiTests(TestCase):
         self.assertTrue(lines[0].startswith("Rank,Shortlisted,Waitlisted,"))
         self.assertTrue(lines[1].startswith("1,Yes,,"))
 
-    def test_a_viewer_can_rank_but_not_export(self):
+    def _staff_header(self, username, *, viewer=False):
         from django.contrib.auth.models import Group, User
         from rest_framework.authtoken.models import Token
 
-        viewer = User.objects.create_user("viewer", password="x", is_staff=True)
-        group, _ = Group.objects.get_or_create(name="Applicant viewers")
-        viewer.groups.add(group)
-        header = {"HTTP_AUTHORIZATION": f"Token {Token.objects.create(user=viewer).key}"}
+        user = User.objects.create_user(username, password="x", is_staff=True)
+        if viewer:
+            group, _ = Group.objects.get_or_create(name="Applicant viewers")
+            user.groups.add(group)
+        return {"HTTP_AUTHORIZATION": f"Token {Token.objects.create(user=user).key}"}
 
+    def test_the_shortlist_and_its_csv_are_superuser_only(self):
+        """
+        A staff login is not a licence to run the selection.
+
+        A reviewer reads applications; the ranking with the cut line drawn, and any
+        file that takes the applicant table out of the panel, stay with the
+        superuser accounts. Both tiers get a 403 with a reason, not a 404.
+        """
+        for label, header in (
+            ("reviewer", self._staff_header("plain_reviewer")),
+            ("viewer", self._staff_header("plain_viewer", viewer=True)),
+        ):
+            with self.subTest(role=label):
+                for path in ("/api/admin/shortlist/", "/api/admin/shortlist/export/"):
+                    response = self.client.post(
+                        path, {}, content_type="application/json", **header
+                    )
+                    self.assertEqual(response.status_code, 403, (path, response.content))
+                    self.assertIn("superuser", response.json()["detail"])
+                # GET on the builder is the panel's "open the view" call, and it is
+                # refused too -- otherwise the restriction is one URL wide.
+                self.assertEqual(
+                    self.client.get("/api/admin/shortlist/", **header).status_code, 403
+                )
+
+    def test_the_applicant_csv_is_superuser_only_too(self):
+        for label, header in (
+            ("reviewer", self._staff_header("csv_reviewer")),
+            ("viewer", self._staff_header("csv_viewer", viewer=True)),
+        ):
+            with self.subTest(role=label):
+                self.assertEqual(
+                    self.client.get("/api/admin/applications/export/", **header).status_code,
+                    403,
+                )
+        # ...and the list they were reading before still works, so the panel is
+        # usable without them: this restricts the file, not the review.
+        self.assertEqual(
+            self.client.get(
+                "/api/admin/applications/", **self._staff_header("list_reviewer")
+            ).status_code,
+            200,
+        )
+
+    def test_a_superuser_can_still_rank_and_export(self):
         self.assertEqual(
             self.client.post("/api/admin/shortlist/", {},
-                             content_type="application/json", **header).status_code,
+                             content_type="application/json", **self.auth()).status_code,
             200,
         )
         self.assertEqual(
-            self.client.post("/api/admin/shortlist/export/", {},
-                             content_type="application/json", **header).status_code,
-            403,
+            self.client.get("/api/admin/applications/export/", **self.auth()).status_code,
+            200,
         )
+
+    def test_the_panel_is_told_which_controls_to_hide(self):
+        """`can_export`/`can_shortlist` drive the buttons; the endpoints enforce it."""
+        superuser = self.client.get("/api/admin/me/", **self.auth()).json()
+        self.assertTrue(superuser["can_export"])
+        self.assertTrue(superuser["can_shortlist"])
+
+        reviewer = self.client.get(
+            "/api/admin/me/", **self._staff_header("flags_reviewer")
+        ).json()
+        self.assertTrue(reviewer["can_review"])       # still reviews applications
+        self.assertFalse(reviewer["can_export"])
+        self.assertFalse(reviewer["can_shortlist"])

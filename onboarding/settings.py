@@ -200,7 +200,12 @@ if not DEBUG:
 # at the eligibility step or allowed through flagged UNFUNDED.
 PORTAL = {
     "CONTACT_EMAIL": os.environ.get("PORTAL_CONTACT_EMAIL", "cmyalla@ihi.or.tz"),
-    "DEADLINE": os.environ.get("PORTAL_DEADLINE", "Friday 28 August 2026"),
+    # Only the value a fresh database starts with, as an ISO date. The live
+    # deadline lives in the PortalSettings row and is changed by staff from the
+    # panel -- editing this after the first migration changes nothing, which is
+    # deliberate: two places to set one date is how the portal ended up accepting
+    # applications a week after the date it was displaying.
+    "DEADLINE": os.environ.get("PORTAL_DEADLINE", "2026-08-30"),
     # Stated on the preparation screen. Set it honestly: a surprise timed section
     # after someone budgeted five minutes is how you collect abandoned forms.
     "DURATION": os.environ.get("PORTAL_DURATION", "about 15 minutes"),
